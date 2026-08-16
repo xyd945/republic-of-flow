@@ -24,15 +24,17 @@ interface IconProps {
   name: string;
   size?: number;
   color?: string;
+  /** Solid fill, for icons that carry an on/off state (e.g. a featured star). */
+  fill?: string;
   className?: string;
   style?: React.CSSProperties;
 }
 
-export function Icon({ name, size = 20, color = 'currentColor', className, style }: IconProps) {
+export function Icon({ name, size = 20, color = 'currentColor', fill = 'none', className, style }: IconProps) {
   const d = PATHS[name];
   if (!d) return null;
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
       stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
       className={className} style={style}>
       <path d={d} />

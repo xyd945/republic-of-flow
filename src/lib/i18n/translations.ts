@@ -88,6 +88,13 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'dossier.go_back': { en: 'Go back', zh: '返回' },
   'dossier.featured': { en: 'Featured', zh: '精选' },
   'dossier.in_class': { en: 'In-class', zh: '课堂内' },
+  'dossier.copied': {
+    en: 'WeChat ID copied — paste it into WeChat search',
+    zh: '微信号已复制 — 请在微信搜索中粘贴',
+  },
+  'dossier.copy_failed': { en: 'Could not copy — WeChat ID is', zh: '复制失败，微信号为' },
+  'dossier.class_only': { en: 'They prefer to meet in class.', zh: '他们更希望在课堂上见面。' },
+  'dossier.no_contact': { en: 'No contact details on file yet.', zh: '尚未填写联系方式。' },
 
   // Market
   'market.title': { en: 'Market', zh: '市场' },
