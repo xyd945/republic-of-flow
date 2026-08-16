@@ -1,0 +1,129 @@
+# Republic of FLOW
+
+A mobile-first private community app for an MBA cohort of ~100 students across
+two classes. It helps classmates discover each other's *hidden worlds* — the
+interests that don't appear on a résumé — and creates reasons to meet in person.
+
+It is deliberately not a social feed. The guiding principle is **match, then
+disappear**: once two people have a reason to talk, the app gets out of the way.
+
+## Stack
+
+| | |
+|---|---|
+| Framework | Next.js 15 (App Router), React 19, TypeScript |
+| Styling | Tailwind CSS v4, paper-and-ink design tokens in `src/app/globals.css` |
+| Data & auth | Supabase — Postgres with RLS, email OTP sign-in |
+| Hosting | Cloudflare Workers via OpenNext |
+| Languages | English (default) and Chinese |
+
+## Getting started
+
+```bash
+npm install
+```
+
+Create `.env.local` in the project root:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...
+```
+
+The two `NEXT_PUBLIC_*` values are compiled into the browser bundle. The secret
+key bypasses RLS entirely — keep it server-side, never expose it to the client,
+and never add it as a build variable.
+
+```bash
+npm run dev
+```
+
+### Database
+
+Run `supabase/migrations/00001_foundation.sql` in the Supabase SQL editor. It
+creates the tables, RLS policies, and a trigger on `auth.users` that builds a
+profile row automatically on first sign-in.
+
+`supabase/fix.sql` is a one-shot repair for an existing database that predates
+the grants and `search_path` fixes. Safe to re-run; skip it on a fresh project.
+
+### Demo data
+
+To populate the app with a fictional cohort while developing:
+
+```bash
+npx tsx scripts/seed-demo.ts          # insert 13 demo members + listings
+npx tsx scripts/seed-demo.ts --clean  # remove them again
+```
+
+Each demo member is a real auth user (`profiles.user_id` is `NOT NULL`), so
+removal goes through `auth.users` and cascades.
+
+## Curators
+
+Curators get the Curator Desk: feature members, deactivate accounts, assign
+classes, suggest people for listings, and send invitations. The flag also drives
+the `is_curator()` helper behind the RLS policies, so it grants real
+database-level access rather than just UI.
+
+```sql
+update profiles
+set is_curator = true
+where user_id = (select id from auth.users where email = 'someone@school.edu');
+```
+
+The person must have signed in at least once, or there is no `auth.users` row to
+match and the update affects zero rows.
+
+## Deploying
+
+Pushes to `main` build and deploy automatically through Cloudflare Workers
+Builds. To deploy by hand:
+
+```bash
+npx wrangler login
+npm run deploy
+```
+
+Cloudflare needs these configured, and the distinction matters:
+
+- **Build variables** — `NEXT_PUBLIC_SUPABASE_URL`,
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Next.js inlines these during
+  `next build`, so they must exist when the build runs. Setting them only as
+  runtime variables leaves `undefined` compiled into the bundle.
+- **Secret** — `SUPABASE_SECRET_KEY`, encrypted, runtime only. Never a build
+  variable: those end up in JavaScript every visitor downloads.
+
+The build command must be `npx @opennextjs/cloudflare build`, not the default
+`npm run build` — `wrangler.jsonc` points at `.open-next/worker.js`, which only
+the OpenNext step produces.
+
+If a deployment serves a plain-text *"Server is not configured"* 503, the build
+ran without the `NEXT_PUBLIC_*` variables. The middleware fails closed on
+purpose: without them it cannot verify sessions, and serving the app wide open
+would be worse than serving an error.
+
+After the first deploy, add the Worker's URL to Supabase under
+**Authentication → URL Configuration**. OTP sign-in works without it (the code
+is typed, not clicked), but invitation emails link to the wrong host until it is
+set.
+
+## Layout
+
+```
+src/
+  app/
+    (app)/      home, people, dossier, market, profile, admin
+    (auth)/     login
+    api/        admin/invite — server-side, re-checks curator status
+  components/ui/
+  lib/
+    i18n/       translations and language context
+    supabase/   browser + server clients, middleware, directory context
+supabase/       migrations and the one-shot repair script
+scripts/        demo data seeding
+```
+
+The whole directory loads once into a React context (`lib/supabase/directory`)
+and is shared across screens, so moving between tabs refetches nothing.
