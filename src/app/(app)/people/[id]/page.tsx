@@ -8,6 +8,50 @@ import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
 import { useDirectory } from '@/lib/supabase/directory';
 
+/**
+ * Copy that also works on iOS.
+ *
+ * navigator.clipboard is exposed only in secure contexts, so it is missing on
+ * an iPhone pointed at a plain-http LAN dev server — and Safari can reject it
+ * even over https if the write drifts out of the user gesture. The deprecated
+ * selection trick still works in both cases, so it backs the modern API up.
+ */
+async function copyText(text: string): Promise<boolean> {
+  if (window.isSecureContext && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through to the legacy path
+    }
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    // readonly keeps the iOS keyboard from flashing up; contentEditable is what
+    // actually lets Safari select the contents. Both are needed there.
+    ta.setAttribute('readonly', '');
+    ta.contentEditable = 'true';
+    // Off-screen but not display:none — iOS won't select an unrendered node.
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;';
+    document.body.appendChild(ta);
+
+    const range = document.createRange();
+    range.selectNodeContents(ta);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    ta.setSelectionRange(0, text.length);
+
+    const ok = document.execCommand('copy');
+    sel?.removeAllRanges();
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 const CONTACT_META: Record<string, { icon: string; label: string }> = {
   whatsapp: { icon: 'link', label: 'WhatsApp' },
   wechat: { icon: 'link', label: 'WeChat' },
@@ -73,12 +117,11 @@ export default function DossierPage() {
            tickets. Best available: put the id on the clipboard, then launch
            WeChat so they can paste it straight into search. Copy first, so a
            blocked or unhandled scheme still leaves them something usable. */
-        try {
-          await navigator.clipboard.writeText(value);
-          setNotice(ui('dossier.copied'));
-        } catch {
-          setNotice(`${ui('dossier.copy_failed')} ${value}`);
-        }
+        setNotice(
+          (await copyText(value))
+            ? ui('dossier.copied')
+            : `${ui('dossier.copy_failed')} ${value}`,
+        );
         window.location.href = 'weixin://';
         break;
       default:
