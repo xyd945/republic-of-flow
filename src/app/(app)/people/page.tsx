@@ -146,7 +146,9 @@ export default function PeoplePage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-serif font-semibold text-base text-ink truncate">{p.full_name}</span>
-                {p.is_featured && <Icon name="star" size={12} color="var(--color-bronze)" />}
+                {p.is_featured && (
+                  <Icon name="star" size={12} color="var(--color-bronze)" fill="var(--color-bronze)" />
+                )}
               </div>
               <div className="font-serif text-xs text-muted truncate">{t(p.headline)}</div>
               <div className="font-serif text-xs text-faint mt-[2px]">{p.class_name}</div>

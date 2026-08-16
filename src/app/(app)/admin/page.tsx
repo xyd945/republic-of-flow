@@ -212,9 +212,20 @@ export default function AdminPage() {
                     title={p.is_featured ? ui('admin.unfeature') : ui('admin.feature')}
                     disabled={busy}
                     onClick={() => patchProfile(p.id, { is_featured: !p.is_featured })}
-                    className="w-7 h-7 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer"
+                    className="w-7 h-7 grid place-items-center rounded-full cursor-pointer"
+                    style={{
+                      background: p.is_featured ? 'var(--color-bronze-wash)' : 'transparent',
+                      border: `1px solid ${p.is_featured ? 'var(--color-bronze)' : 'var(--color-line)'}`,
+                    }}
                   >
-                    <Icon name="star" size={13} color={p.is_featured ? 'var(--color-bronze)' : 'var(--color-faint)'} />
+                    {/* Filled vs hollow — bronze and faint are too close in
+                        brightness to read as an on/off state on their own. */}
+                    <Icon
+                      name="star"
+                      size={13}
+                      color={p.is_featured ? 'var(--color-bronze)' : 'var(--color-faint)'}
+                      fill={p.is_featured ? 'var(--color-bronze)' : 'none'}
+                    />
                   </button>
                   <button
                     type="button"

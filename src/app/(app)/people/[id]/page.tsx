@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Avatar, Polaroid, Icon, Chip, WaxSeal, Badge, Button } from '@/components/ui';
 import { CATEGORY_COLORS } from '@/lib/seed';
@@ -20,6 +21,8 @@ export default function DossierPage() {
   const { t, ui, lang } = useI18n();
 
   const { profiles, loading } = useDirectory();
+  // Declared before the early returns below — hooks can't live after a branch.
+  const [notice, setNotice] = useState('');
 
   // Must come before the not-found branch, or the dossier flashes
   // "Profile not found" on every load.
@@ -48,6 +51,40 @@ export default function DossierPage() {
   }
 
   const contact = CONTACT_META[profile.contact_kind] ?? { icon: 'link', label: profile.contact_kind };
+
+  /* "Match, then disappear" — hand off to the channel they actually use rather
+     than building yet another inbox. */
+  const connect = async () => {
+    const value = profile.contact_value?.trim();
+    if (profile.contact_kind !== 'class' && !value) {
+      setNotice(ui('dossier.no_contact'));
+      return;
+    }
+    switch (profile.contact_kind) {
+      case 'email':
+        window.location.href = `mailto:${value}`;
+        break;
+      case 'whatsapp':
+        window.open(`https://wa.me/${value.replace(/[^\d]/g, '')}`, '_blank', 'noopener');
+        break;
+      case 'wechat':
+        /* Tencent discontinued weixin://dl/chat?username= and publishes no
+           scheme for "open chat with X" or "add friend X" — only Mini Program
+           tickets. Best available: put the id on the clipboard, then launch
+           WeChat so they can paste it straight into search. Copy first, so a
+           blocked or unhandled scheme still leaves them something usable. */
+        try {
+          await navigator.clipboard.writeText(value);
+          setNotice(ui('dossier.copied'));
+        } catch {
+          setNotice(`${ui('dossier.copy_failed')} ${value}`);
+        }
+        window.location.href = 'weixin://';
+        break;
+      default:
+        setNotice(ui('dossier.class_only'));
+    }
+  };
 
   return (
     <div className="pb-[90px]">
@@ -170,7 +207,10 @@ export default function DossierPage() {
 
       {/* Sticky action bar */}
       <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-[18px] pb-3 pt-2 bg-white/90 backdrop-blur-md border-t border-line z-40">
-        <Button tone="bronze" icon={<Icon name="link" size={15} color="var(--color-dark)" />}>
+        {notice && (
+          <div className="mb-2 text-center font-serif text-xs text-muted">{notice}</div>
+        )}
+        <Button tone="bronze" onClick={connect} icon={<Icon name="link" size={15} color="var(--color-dark)" />}>
           {ui('dossier.connect_with')} {profile.full_name.split(' ')[0]}
         </Button>
       </div>
