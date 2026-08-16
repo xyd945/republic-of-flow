@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+@theme {
+  /* ---- Parchment surfaces ---- */
+  --color-paper-0: #fbf6ec;
+  --color-paper-1: #f3ead9;
+  --color-paper-2: #e9dcc2;
+  --color-paper-3: #e5d3b6;
+  --color-paper-edge: #d8c4a1;
+  --color-white: #fffdf8;
+
+  /* ---- Ink (text) ---- */
+  --color-ink: #1f1a15;
+  --color-ink-2: #3a332a;
+  --color-muted: #6b6258;
+  --color-faint: #8a8072;
+
+  /* ---- Rules & hairlines ---- */
+  --color-line: #cdbda2;
+  --color-line-soft: rgba(132, 105, 69, 0.20);
+  --color-line-dashed: #b4a083;
+
+  /* ---- Bronze ---- */
+  --color-bronze: #8f7044;
+  --color-bronze-deep: #6f552f;
+  --color-bronze-light: #b49562;
+  --color-bronze-wash: #efe4d1;
+
+  /* ---- Guild / semantic ---- */
+  --color-red: #8a3a32;
+  --color-red-deep: #6f2b25;
+  --color-red-wash: #f1ded9;
+  --color-green: #465a49;
+  --color-green-wash: #e1e8df;
+  --color-blue: #405069;
+  --color-blue-wash: #dfe4ea;
+
+  /* ---- Dark stage ---- */
+  --color-dark: #171512;
+  --color-dark-2: #2c271f;
+  --color-dark-line: #625743;
+  --color-dark-paper: #f7edda;
+  --color-dark-muted: #ccb997;
+
+  /* ---- Semantic surfaces ---- */
+  --color-surface-page: #ede1cb;
+  --color-surface-card: #fffdf8;
+  --color-surface-panel: #e9dcc2;
+  --color-surface-sunk: #efe2ca;
+  --color-surface-dark: #171512;
+
+  /* ---- Fonts ----
+     Latin face first, then Noto Serif SC so CJK glyphs resolve to a matching
+     serif instead of an arbitrary system fallback. Cinzel and Caveat carry no
+     Chinese at all, so their stacks must fall through too. */
+  --font-display: var(--font-cinzel), var(--font-noto-sc), "Songti SC", Georgia, serif;
+  --font-serif: var(--font-garamond), var(--font-noto-sc), "Songti SC", Georgia, serif;
+  --font-cjk: var(--font-noto-sc), "Songti SC", "STSong", serif;
+  --font-hand: var(--font-caveat), var(--font-noto-sc), cursive;
+
+  /* ---- Type scale ----
+     Seven steps. Everything in the UI must land on one of these — no
+     half-pixel one-offs. `eyebrow` is the uppercase tracked label tier. */
+  --text-eyebrow: 0.625rem;  /* 10px */
+  --text-xs: 0.75rem;        /* 12px */
+  --text-sm: 0.8125rem;      /* 13px */
+  --text-base: 0.9375rem;    /* 15px */
+  --text-lg: 1.0625rem;      /* 17px */
+  --text-xl: 1.25rem;        /* 20px */
+  --text-2xl: 1.5rem;        /* 24px */
+
+  /* ---- Spacing ---- */
+  --spacing-gutter: 18px;
+
+  /* ---- Radii ---- */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 13px;
+  --radius-lg: 18px;
+  --radius-xl: 20px;
+
+  /* ---- Shadows ---- */
+  --shadow-sm: 0 4px 12px rgba(63, 45, 23, 0.07);
+  --shadow-md: 0 14px 34px rgba(63, 45, 23, 0.10);
+  --shadow-lg: 0 22px 50px rgba(63, 45, 23, 0.16);
+
+  /* ---- Animation ---- */
+  --ease-quiet: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --animate-fade: rofFade 0.2s ease;
+  --animate-sheet: rofSheet 0.28s var(--ease-quiet);
+}
+
+@keyframes rofFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rofSheet {
+  from { transform: translateY(28px); }
+  to { transform: translateY(0); }
+}
+
+/* ---- Base resets ---- */
+html, body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-serif);
+  color: var(--color-ink);
+  background: var(--color-surface-page);
+  background-image:
+    radial-gradient(circle at 15% 4%, rgba(143, 112, 68, 0.10), transparent 22%),
+    linear-gradient(180deg, #f9f3e8 0%, #eee2cd 100%);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- Scrollbar ---- */
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* ---- Sheet: aged paper card ---- */
+.sheet {
+  position: relative;
+  border-radius: 3px;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(150, 108, 46, 0.13), transparent 26%),
+    radial-gradient(circle at 84% 24%, rgba(120, 82, 34, 0.11), transparent 24%),
+    radial-gradient(circle at 66% 86%, rgba(140, 98, 42, 0.12), transparent 28%),
+    radial-gradient(125% 120% at 50% -8%, #fbf1da 0%, #f4e6c6 46%, #ecdcb6 78%, #e2cfa4 100%);
+  border: 1px solid #c2a570;
+  box-shadow: 0 1px 1px rgba(40, 26, 8, 0.16), 0 16px 30px rgba(24, 14, 3, 0.34),
+    inset 0 0 1px rgba(120, 78, 26, 0.55);
+}
+.sheet > * { position: relative; z-index: 2; }
+.sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='170' height='170'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>");
+  background-size: 170px 170px;
+  opacity: 0.2;
+  mix-blend-mode: multiply;
+}
+.sheet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: inset 0 0 22px rgba(120, 74, 22, 0.2), inset 0 0 52px rgba(120, 74, 22, 0.12);
+  background: radial-gradient(140% 130% at 50% 44%, transparent 54%, rgba(120, 74, 22, 0.18) 100%);
+}
+
+/* ---- Sheet dark variant ---- */
+.sheet-dark {
+  position: relative;
+  border-radius: 3px;
+  background: linear-gradient(158deg, #292014, #171009);
+  border: 1px solid #4a3c26;
+  box-shadow: 0 16px 34px rgba(8, 4, 1, 0.55), inset 0 1px 0 rgba(180, 149, 98, 0.16);
+}
+
+/* ---- Stacked paper ---- */
+.stack { position: relative; }
+.stack::before, .stack::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: #e2cfa4;
+  border: 1px solid #c2a570;
+  box-shadow: 0 8px 16px rgba(24, 14, 3, 0.26);
+  z-index: -1;
+}
+.stack::before { transform: rotate(-1.8deg) translate(-4px, 5px); }
+.stack::after { transform: rotate(1.5deg) translate(5px, 3px); background: #dcc79b; }
+
+/* ---- Tape strip ---- */
+.tape {
+  position: absolute;
+  width: 74px;
+  height: 26px;
+  z-index: 5;
+  background: linear-gradient(180deg, rgba(224, 210, 172, 0.8), rgba(198, 178, 134, 0.66));
+  box-shadow: 0 1px 3px rgba(63, 45, 23, 0.22);
+  border-left: 1px dashed rgba(120, 99, 70, 0.32);
+  border-right: 1px dashed rgba(120, 99, 70, 0.32);
+}
+
+/* ---- Parchment input ---- */
+.parch-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #bfa268;
+  border-radius: 3px;
+  background: #f6ead0;
+  padding: 11px 12px;
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  color: var(--color-ink);
+  outline: none;
+  box-shadow: inset 0 1px 3px rgba(90, 58, 18, 0.14);
+}
+.parch-input:focus { border-color: var(--color-bronze); }
+.parch-input::placeholder { color: var(--color-faint); }
+
+textarea.parch-input { resize: none; line-height: 1.55; }
+
+select.parch-input {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b6258'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  top: 80px;
+  z-index: 60;
+  max-width: 380px;
+  width: calc(100% - 48px);
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--color-ink);
+  color: var(--color-white);
+  font-family: var(--font-serif);
+  font-size: 12.5px;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transition: all 0.28s var(--ease-quiet);
+  pointer-events: none;
+  text-align: center;
+}
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Republic of FLOW — Multilingual UI Prototype</title>
+<style>
+:root{
+  --paper:#f3ead9; --paper2:#e5d3b6; --ink:#1f1a15; --muted:#6b6258;
+  --bronze:#8f7044; --red:#8a3a32; --green:#465a49; --blue:#405069;
+  --line:#cdbda2; --white:#fffdf8; --shadow:0 14px 34px rgba(63,45,23,.10);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#ede1cb;color:var(--ink)}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",
+  "Microsoft YaHei","Noto Sans Thai","Noto Sans KR",Arial,sans-serif;
+  background:
+    radial-gradient(circle at 15% 4%,rgba(143,112,68,.10),transparent 22%),
+    linear-gradient(180deg,#f9f3e8 0%,#eee2cd 100%);
+}
+input[type=radio]{position:absolute;opacity:0;pointer-events:none}
+.app{width:min(100%,430px);min-height:100vh;margin:auto;background:rgba(255,253,248,.78);position:relative}
+
+/* language */
+.lang-wrap{position:sticky;top:0;z-index:50;padding:10px 12px 7px;background:rgba(248,242,231,.96);backdrop-filter:blur(14px);border-bottom:1px solid rgba(120,99,70,.12)}
+.topline{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{font:700 13px Georgia,serif;letter-spacing:.10em}
+.langs{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.langs label{
+  font-size:9px;line-height:1;padding:6px 7px;border:1px solid #c9b99f;border-radius:999px;
+  color:#766b5e;background:rgba(255,255,255,.45);cursor:pointer
+}
+#lang-zh:checked ~ .app .langs label[for=lang-zh],
+#lang-en:checked ~ .app .langs label[for=lang-en],
+#lang-th:checked ~ .app .langs label[for=lang-th],
+#lang-es:checked ~ .app .langs label[for=lang-es],
+#lang-ko:checked ~ .app .langs label[for=lang-ko]{
+  background:var(--ink);color:white;border-color:var(--ink)
+}
+.lang{display:none}
+#lang-zh:checked ~ .app .zh,
+#lang-en:checked ~ .app .en,
+#lang-th:checked ~ .app .th,
+#lang-es:checked ~ .app .es,
+#lang-ko:checked ~ .app .ko{display:inline}
+
+/* page switching */
+.page{display:none;min-height:calc(100vh - 56px);padding-bottom:92px}
+#page-home:checked ~ .app #home,
+#page-quests:checked ~ .app #quests,
+#page-market:checked ~ .app #market,
+#page-auction:checked ~ .app #auction,
+#page-guilds:checked ~ .app #guilds,
+#page-profile:checked ~ .app #profile{display:block}
+
+.nav{
+  position:fixed;z-index:60;left:50%;bottom:0;transform:translateX(-50%);
+  width:min(100%,430px);display:grid;grid-template-columns:repeat(5,1fr);
+  background:rgba(248,242,231,.97);backdrop-filter:blur(14px);
+  border-top:1px solid rgba(120,99,70,.15);
+  padding:8px 7px calc(8px + env(safe-area-inset-bottom));
+}
+.nav label{font-size:9px;color:#72685d;text-align:center;cursor:pointer;padding:3px 0}
+.nav .ico{display:block;font-size:17px;line-height:1.15;margin-bottom:2px}
+#page-home:checked ~ .app .nav label[for=page-home],
+#page-quests:checked ~ .app .nav label[for=page-quests],
+#page-market:checked ~ .app .nav label[for=page-market],
+#page-auction:checked ~ .app .nav label[for=page-auction],
+#page-guilds:checked ~ .app .nav label[for=page-guilds]{color:var(--ink);font-weight:700}
+
+/* shared */
+.hero{padding:30px 20px 8px}
+.eyebrow{font:700 10px Georgia,serif;letter-spacing:.18em;color:var(--bronze)}
+h1,h2,h3,h4{font-family:Georgia,"Songti SC","STSong","Noto Serif",serif}
+.hero h1{font-size:39px;line-height:1.02;letter-spacing:-.03em;margin:9px 0 11px}
+.hero .lede{font-size:14px;line-height:1.72;color:var(--muted);margin:0}
+.story{
+  margin:16px 18px 0;padding:18px;border-radius:20px;
+  background:linear-gradient(145deg,rgba(255,253,248,.96),rgba(234,218,188,.92));
+  border:1px solid rgba(132,105,69,.22);box-shadow:var(--shadow);position:relative;overflow:hidden
+}
+.story:after{content:"";position:absolute;width:145px;height:145px;border:1px solid rgba(143,112,68,.13);border-radius:50%;right:-70px;top:-68px}
+.story h2{font-size:22px;line-height:1.25;margin:8px 0 10px}
+.story p{font-size:12px;line-height:1.72;color:#5d554c;margin:8px 0}
+.storyline{font-family:Georgia,"Songti SC",serif;font-size:18px!important;line-height:1.55!important;color:var(--ink)!important}
+.storygrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px}
+.storygrid div{padding:11px;border-radius:13px;border:1px solid rgba(132,105,69,.18);background:rgba(255,255,255,.36)}
+.storygrid b{display:block;font-size:10px;letter-spacing:.10em;color:var(--bronze);margin-bottom:5px}
+.storygrid span{font-size:10.5px;line-height:1.45;color:var(--muted)}
+.section{padding:15px 18px 5px}
+.section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:12px}
+.section-head h2{font-size:20px;margin:0}
+.small{font-size:10px;color:var(--bronze)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile,.card,.guild{
+  border:1px solid rgba(132,105,69,.18);background:rgba(255,253,248,.93);
+  border-radius:18px;box-shadow:var(--shadow)
+}
+.tile{min-height:146px;padding:14px;position:relative;cursor:pointer;text-align:left}
+.tile .type,.card .type{font-size:9.5px;font-weight:800;letter-spacing:.12em;color:var(--bronze)}
+.tile h3{font-size:18px;line-height:1.13;margin:9px 0 6px}
+.tile p{font-size:10.5px;line-height:1.45;color:var(--muted);margin:0}
+.tile .go{position:absolute;left:14px;bottom:13px;font-size:10.5px;font-weight:700}
+.page-title{padding:27px 18px 10px}
+.page-title h1{font-size:31px;line-height:1.05;margin:6px 0 8px}
+.page-title p{font-size:12px;line-height:1.65;color:var(--muted);margin:0}
+.cards{display:flex;flex-direction:column;gap:12px}
+.card{padding:15px}
+.cardtop{display:flex;justify-content:space-between;gap:10px}
+.badge{font-size:9.5px;padding:5px 8px;border-radius:999px;background:#efe4d1;color:var(--bronze);font-weight:700}
+.badge.green{background:#e1e8df;color:var(--green)}
+.badge.red{background:#f1ded9;color:var(--red)}
+.card h3{font-size:21px;line-height:1.18;margin:8px 0 5px}
+.by{font-size:10.5px;color:var(--muted);margin-bottom:10px}
+.desc{font-size:11.5px;line-height:1.62;color:#5e564c;margin:0 0 13px}
+.meta{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
+.meta span{font-size:9.5px;padding:5px 8px;border:1px solid var(--line);border-radius:999px;color:#665e55}
+.btn{
+  display:block;width:100%;border:0;border-radius:12px;padding:11px 12px;
+  background:var(--ink);color:white;font-weight:700;font-size:11.5px;text-align:center;cursor:pointer
+}
+.btn.out{background:transparent;color:var(--ink);border:1px solid var(--ink)}
+.auction{background:linear-gradient(145deg,#2c271f,#171512);color:#f7edda;border-color:#28231d}
+.auction .type,.auction .by,.auction .desc{color:#ccb997}
+.auction .badge{background:#4e302b;color:#f2c4ba}
+.auction .meta span{border-color:#625743;color:#d7c7a8}
+.auction .btn{background:#b49562;color:#171512}
+.price{font:28px Georgia,serif;margin:12px 0 13px}
+.guilds{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.guild{padding:14px;text-align:left;cursor:pointer}
+.guildico{width:42px;height:42px;border:1px solid var(--bronze);border-radius:50%;display:grid;place-items:center;font-size:18px;margin-bottom:11px}
+.guild h3{font-size:15px;margin:0 0 5px}.guild p{font-size:10px;line-height:1.45;color:var(--muted);margin:0}
+.profile-box{margin:0 18px 14px;padding:16px;border-radius:19px;background:#efe2ca;border:1px solid #d1bea0}
+.profile-head{display:flex;gap:12px;align-items:center}.portrait{width:58px;height:58px;border-radius:12px;background:linear-gradient(145deg,#8f7044,#433620);color:#fff;display:grid;place-items:center;font:20px Georgia,serif}
+.profile-head h3{font-size:19px;margin:0}.sub{font-size:10px;color:var(--muted);margin-top:2px}
+.hidden{border-top:1px dashed #b4a083;margin-top:13px;padding-top:12px}.hidden b{font:700 10px Georgia,serif;letter-spacing:.15em;color:var(--bronze)}
+.hidden ul{padding-left:18px;margin:8px 0 0;font-size:11.5px;line-height:1.75}
+.constitution{margin:15px 18px;padding:16px;border-radius:18px;background:rgba(236,221,194,.75);border:1px solid #bba583}
+.constitution h3{font-size:17px;margin:0 0 9px}.constitution p{font-size:10.5px;line-height:1.6;color:var(--muted);margin:5px 0}
+.profile-link{display:inline-block;margin-top:12px}
+.footer-note{padding:5px 18px 18px;font-size:9.5px;color:#7a7167;line-height:1.5}
+</style>
+</head>
+<body>
+
+<!-- Language state -->
+<input type="radio" name="lang" id="lang-zh" checked>
+<input type="radio" name="lang" id="lang-en">
+<input type="radio" name="lang" id="lang-th">
+<input type="radio" name="lang" id="lang-es">
+<input type="radio" name="lang" id="lang-ko">
+
+<!-- Page state -->
+<input type="radio" name="page" id="page-home" checked>
+<input type="radio" name="page" id="page-quests">
+<input type="radio" name="page" id="page-market">
+<input type="radio" name="page" id="page-auction">
+<input type="radio" name="page" id="page-guilds">
+<input type="radio" name="page" id="page-profile">
+
+<div class="app">
+  <header class="lang-wrap">
+    <div class="topline">
+      <div class="brand">REPUBLIC OF FLOW</div>
+      <div class="langs">
+        <label for="lang-zh">中文</label>
+        <label for="lang-en">EN</label>
+        <label for="lang-th">ไทย</label>
+        <label for="lang-es">ES</label>
+        <label for="lang-ko">한국어</label>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOME -->
+  <main id="home" class="page">
+    <section class="hero">
+      <div class="eyebrow">THE REPUBLIC HAS NO LAND</div>
+      <h1>
+        <span class="lang zh">一个没有疆域的共和国。</span>
+        <span class="lang en">A republic without borders.</span>
+        <span class="lang th">สาธารณรัฐที่ไร้พรมแดน</span>
+        <span class="lang es">Una república sin fronteras.</span>
+        <span class="lang ko">국경 없는 공화국.</span>
+      </h1>
+      <p class="lede">
+        <span class="lang zh">它没有土地，也没有固定边界。它存在于人与人的连接之中；当时间、能力、帮助、经验和信任开始流动，共和国就开始出现。</span>
+        <span class="lang en">It has no land and no fixed border. It exists through human connection. When time, skills, help, experience and trust begin to flow, the Republic appears.</span>
+        <span class="lang th">ที่นี่ไม่มีผืนดินและไม่มีพรมแดนตายตัว มันเกิดขึ้นจากความเชื่อมโยงระหว่างผู้คน เมื่อเวลา ทักษะ ความช่วยเหลือ ประสบการณ์ และความไว้วางใจเริ่มไหลเวียน สาธารณรัฐก็ถือกำเนิดขึ้น</span>
+        <span class="lang es">No tiene territorio ni fronteras fijas. Existe a través de las conexiones humanas. Cuando el tiempo, las habilidades, la ayuda, la experiencia y la confianza empiezan a circular, la República aparece.</span>
+        <span class="lang ko">이곳에는 땅도 고정된 경계도 없습니다. 사람과 사람의 연결 속에서 존재합니다. 시간, 능력, 도움, 경험과 신뢰가 흐르기 시작할 때 공화국이 모습을 드러냅니다.</span>
+      </p>
+    </section>
+
+    <section class="story">
+      <div class="eyebrow">WHAT IS THIS PLACE?</div>
+      <h2>
+        <span class="lang zh">一个由 58 位 Founders 共同生成的世界。</span>
+        <span class="lang en">A world generated by 58 Founders.</span>
+        <span class="lang th">โลกที่ร่วมกันสร้างโดยผู้ก่อตั้ง 58 คน</span>
+        <span class="lang es">Un mundo creado por 58 Founders.</span>
+        <span class="lang ko">58명의 Founders가 함께 만드는 세계.</span>
+      </h2>
+      <p class="storyline">
+        <span class="lang zh">共和国没有土地。<br>它存在于每一次真实发生的故事之中。</span>
+        <span class="lang en">The Republic has no land.<br>It lives in every story that truly happens.</span>
+        <span class="lang th">สาธารณรัฐไม่มีผืนดิน<br>มันดำรงอยู่ในทุกเรื่องราวที่เกิดขึ้นจริง</span>
+        <span class="lang es">La República no tiene tierra.<br>Vive en cada historia que realmente sucede.</span>
+        <span class="lang ko">공화국에는 땅이 없습니다.<br>진짜로 일어나는 모든 이야기 속에 존재합니다.</span>
+      </p>
+      <div class="storygrid">
+        <div>
+          <b>FLOW</b>
+          <span class="lang zh">不是分数，而是公共贡献和真实交换留下的实体货币。</span>
+          <span class="lang en">Not a score, but a physical currency born from contribution and real exchange.</span>
+          <span class="lang th">ไม่ใช่คะแนน แต่เป็นสกุลเงินจริงที่เกิดจากการมีส่วนร่วมและการแลกเปลี่ยน</span>
+          <span class="lang es">No es una puntuación, sino una moneda física nacida de la contribución y el intercambio real.</span>
+          <span class="lang ko">점수가 아니라 공공 기여와 실제 교환에서 생기는 실물 화폐입니다.</span>
+        </div>
+        <div>
+          <b>WHY</b>
+          <span class="lang zh">让原本不容易发生、但值得发生的连接更容易出现。</span>
+          <span class="lang en">To make unlikely but worthwhile connections more likely to happen.</span>
+          <span class="lang th">เพื่อทำให้ความเชื่อมโยงที่เกิดขึ้นยากแต่มีคุณค่า เกิดขึ้นได้ง่ายขึ้น</span>
+          <span class="lang es">Para que conexiones improbables pero valiosas puedan suceder.</span>
+          <span class="lang ko">원래는 잘 일어나지 않지만 가치 있는 연결이 더 쉽게 일어나게 합니다.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>
+          <span class="lang zh">共和国正在发生什么？</span>
+          <span class="lang en">What is happening?</span>
+          <span class="lang th">กำลังเกิดอะไรขึ้น?</span>
+          <span class="lang es">¿Qué está pasando?</span>
+          <span class="lang ko">지금 무엇이 일어나고 있나요?</span>
+        </h2>
+      </div>
+      <div class="grid2">
+        <label class="tile" for="page-quests">
+          <div class="type">QUEST</div>
+          <h3><span class="lang zh">留下本月 3 个故事</span><span class="lang en">Capture 3 stories</span><span class="lang th">เก็บ 3 เรื่องราว</span><span class="lang es">Guarda 3 historias</span><span class="lang ko">이번 달 3개의 이야기</span></h3>
+          <p>Chronicle Guild · 5 FLOW</p><div class="go">Explore →</div>
+        </label>
+        <label class="tile" for="page-market">
+          <div class="type">OFFER</div>
+          <h3><span class="lang zh">100% 成功的恰巴塔秘籍</span><span class="lang en">The Ciabatta Secret</span><span class="lang th">เคล็ดลับ Ciabatta</span><span class="lang es">El secreto de la ciabatta</span><span class="lang ko">치아바타 비법</span></h3>
+          <p>邱雨萌 · Suggested</p><div class="go">Enter →</div>
+        </label>
+        <label class="tile" for="page-auction">
+          <div class="type" style="color:var(--red)">AUCTION LIVE</div>
+          <h3>From Missiles to Humanoid Robots</h3>
+          <p>朱世廉 · 8 FLOW</p><div class="go">Bid →</div>
+        </label>
+        <label class="tile" for="page-market">
+          <div class="type">WANTED</div>
+          <h3><span class="lang zh">我想真正理解一次 M&A</span><span class="lang en">I want to understand M&A</span><span class="lang th">ฉันอยากเข้าใจ M&A จริงๆ</span><span class="lang es">Quiero entender de verdad un M&A</span><span class="lang ko">M&A를 제대로 이해하고 싶어요</span></h3>
+          <p>10 FLOW Bounty</p><div class="go">I can help →</div>
+        </label>
+      </div>
+    </section>
+
+    <section class="constitution">
+      <h3>Article 0 · People before the game.</h3>
+      <p><b>Reality First.</b> <span class="lang zh">现实更方便时，系统让路。</span><span class="lang en">When reality is easier, the system gets out of the way.</span><span class="lang th">เมื่อโลกจริงสะดวกกว่า ระบบต้องหลีกทาง</span><span class="lang es">Cuando la realidad es más fácil, el sistema se aparta.</span><span class="lang ko">현실이 더 편하면 시스템은 물러납니다.</span></p>
+      <p><b>Gamify discovery, not relationships.</b></p>
+      <p><b>Match, then disappear.</b></p>
+    </section>
+
+    <section class="section">
+      <label class="btn out" for="page-profile">
+        <span class="lang zh">查看 Founder 档案</span><span class="lang en">View Founder dossiers</span><span class="lang th">ดูแฟ้มผู้ก่อตั้ง</span><span class="lang es">Ver perfiles de Founders</span><span class="lang ko">Founder 프로필 보기</span>
+      </label>
+    </section>
+  </main>
+
+  <!-- QUESTS -->
+  <main id="quests" class="page">
+    <section class="page-title">
+      <div class="eyebrow">QUEST BOARD</div>
+      <h1><span class="lang zh">有人需要站出来。</span><span class="lang en">Someone needs to step up.</span><span class="lang th">ใครสักคนต้องก้าวออกมา</span><span class="lang es">Alguien tiene que dar el paso.</span><span class="lang ko">누군가는 나서야 합니다.</span></h1>
+      <p><span class="lang zh">Quest 只用于公共贡献。认领之后，真实事情在线下完成。</span><span class="lang en">Quests are for public contribution. Claim here; complete it in real life.</span><span class="lang th">Quest มีไว้สำหรับการมีส่วนร่วมต่อส่วนรวม รับภารกิจที่นี่ แล้วทำให้เสร็จในโลกจริง</span><span class="lang es">Las Quests son para contribuciones públicas. Se aceptan aquí y se completan en la vida real.</span><span class="lang ko">Quest는 공공 기여를 위한 것입니다. 여기서 수락하고 현실에서 완성합니다.</span></p>
+    </section>
+    <section class="section cards">
+      <div class="card">
+        <div class="cardtop"><div class="type">CHRONICLE GUILD · QUEST 014</div><div class="badge green">OPEN</div></div>
+        <h3><span class="lang zh">留下本月 3 个值得被记住的故事</span><span class="lang en">Capture 3 stories worth remembering</span><span class="lang th">เก็บ 3 เรื่องราวที่ควรถูกจดจำ</span><span class="lang es">Guarda 3 historias que merecen recordarse</span><span class="lang ko">기억할 가치가 있는 3개의 이야기</span></h3>
+        <p class="desc"><span class="lang zh">可以是一场活动、一个人、一个项目，或一次原本不会发生的连接。</span><span class="lang en">An event, a person, a project, or a connection that might otherwise never happen.</span><span class="lang th">อาจเป็นกิจกรรม บุคคล โปรเจกต์ หรือความเชื่อมโยงที่อาจไม่เกิดขึ้นเลย</span><span class="lang es">Puede ser un evento, una persona, un proyecto o una conexión que quizá nunca habría ocurrido.</span><span class="lang ko">행사, 사람, 프로젝트 또는 원래라면 생기지 않았을 연결일 수 있습니다.</span></p>
+        <div class="meta"><span>5 FLOW</span><span>1–3 people</span><span>Sep 30</span></div>
+        <button class="btn">CLAIM QUEST</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- MARKET -->
+  <main id="market" class="page">
+    <section class="page-title">
+      <div class="eyebrow">FLOW MARKET</div>
+      <h1><span class="lang zh">你想发现什么？</span><span class="lang en">What do you want to discover?</span><span class="lang th">คุณอยากค้นพบอะไร?</span><span class="lang es">¿Qué quieres descubrir?</span><span class="lang ko">무엇을 발견하고 싶나요?</span></h1>
+      <p><span class="lang zh">Wanted：我不知道该找谁。Offer：我愿意打开一个属于自己的世界。</span><span class="lang en">Wanted: I don't know who to ask. Offer: I can open one of my worlds to others.</span><span class="lang th">Wanted: ฉันไม่รู้ว่าควรถามใคร Offer: ฉันพร้อมเปิดโลกหนึ่งของฉันให้คนอื่น</span><span class="lang es">Wanted: no sé a quién preguntar. Offer: puedo abrir uno de mis mundos a los demás.</span><span class="lang ko">Wanted: 누구에게 물어봐야 할지 모를 때. Offer: 내 세계 하나를 다른 사람에게 열어줄 때.</span></p>
+    </section>
+    <section class="section cards">
+      <div class="card">
+        <div class="cardtop"><div class="type">WANTED</div><div class="badge">10 FLOW</div></div>
+        <h3><span class="lang zh">我想真正理解一次 M&A 到底是怎么做的</span><span class="lang en">I want to understand how M&A really works</span><span class="lang th">ฉันอยากเข้าใจว่า M&A จริงๆ ทำงานอย่างไร</span><span class="lang es">Quiero entender cómo funciona realmente un M&A</span><span class="lang ko">M&A가 실제로 어떻게 진행되는지 알고 싶어요</span></h3>
+        <div class="by">Potential match · Pajaree</div>
+        <p class="desc">M&A · IPO · Valuation · Fund Raising</p>
+        <button class="btn out">I CAN HELP</button>
+      </div>
+      <div class="card">
+        <div class="cardtop"><div class="type">OFFER · SUGGESTED</div><div class="badge">3 SPOTS</div></div>
+        <h3><span class="lang zh">城市观鸟 Walk</span><span class="lang en">Urban Bird-Watching Walk</span><span class="lang th">เดินดูนกในเมือง</span><span class="lang es">Paseo urbano de observación de aves</span><span class="lang ko">도시 조류 관찰 Walk</span></h3>
+        <div class="by">Inspired by 赵镜渊's real profile</div>
+        <p class="desc"><span class="lang zh">让你开始注意平时完全不会看见的城市生命。</span><span class="lang en">Start noticing urban life you normally walk past.</span><span class="lang th">เริ่มมองเห็นชีวิตในเมืองที่ปกติเราเดินผ่านไป</span><span class="lang es">Empieza a notar la vida urbana que normalmente ignoras.</span><span class="lang ko">평소 지나치던 도시의 생명을 발견해보세요.</span></p>
+        <button class="btn out">I'M INTERESTED</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- AUCTION -->
+  <main id="auction" class="page">
+    <section class="page-title">
+      <div class="eyebrow">AUCTION NIGHT</div>
+      <h1>The September Catalogue</h1>
+      <p><span class="lang zh">拍卖的是稀缺体验，不是人的价值。Quest 让 FLOW 被赚到，Auction 让 FLOW 被想要。</span><span class="lang en">We auction scarce experiences, never people's value. Quests make FLOW earnable; auctions make FLOW desirable.</span><span class="lang th">เราประมูลประสบการณ์ที่หายาก ไม่ใช่คุณค่าของคน Quest ทำให้ FLOW หาได้ ส่วน Auction ทำให้ FLOW น่าอยากได้</span><span class="lang es">Subastamos experiencias escasas, nunca el valor de una persona. Las Quests hacen que FLOW se gane; las subastas hacen que FLOW se desee.</span><span class="lang ko">사람의 가치를 경매하지 않습니다. 희소한 경험을 경매합니다. Quest는 FLOW를 벌게 하고, Auction은 FLOW를 원하게 합니다.</span></p>
+    </section>
+    <section class="section cards">
+      <div class="card auction">
+        <div class="cardtop"><div class="type">LOT 03 · LIVE</div><div class="badge red">LIVE</div></div>
+        <h3>FROM MISSILES TO HUMANOID ROBOTS</h3>
+        <div class="by">Suggested experience based on 朱世廉's real background</div>
+        <p class="desc"><span class="lang zh">前军工行业导弹制造者，现做人形机器人。一次限定的小范围深聊。</span><span class="lang en">Former missile manufacturing; now humanoid robotics. A limited small-group conversation.</span><span class="lang th">จากการผลิตขีปนาวุธสู่หุ่นยนต์มนุษย์ บทสนทนากลุ่มเล็กแบบจำกัด</span><span class="lang es">De la fabricación de misiles a la robótica humanoide. Una conversación limitada en grupo pequeño.</span><span class="lang ko">미사일 제조에서 휴머노이드 로봇까지. 소수 정원 대화.</span></p>
+        <div class="price">8 FLOW</div>
+        <button class="btn">PLACE MY BID</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- GUILDS -->
+  <main id="guilds" class="page">
+    <section class="page-title">
+      <div class="eyebrow">GUILD HALL</div>
+      <h1><span class="lang zh">选择一个你最近想贡献的方向。</span><span class="lang en">Choose where you want to contribute.</span><span class="lang th">เลือกพื้นที่ที่คุณอยากมีส่วนร่วม</span><span class="lang es">Elige dónde quieres contribuir.</span><span class="lang ko">어디에 기여하고 싶은지 선택하세요.</span></h1>
+    </section>
+    <section class="section">
+      <div class="guilds">
+        <div class="guild"><div class="guildico">✒</div><h3>Chronicle</h3><p><span class="lang zh">记录、采访、摄影、故事。</span><span class="lang en">Stories, interviews, photos, archive.</span><span class="lang th">เรื่องราว สัมภาษณ์ ภาพถ่าย</span><span class="lang es">Historias, entrevistas, fotos.</span><span class="lang ko">이야기, 인터뷰, 사진.</span></p></div>
+        <div class="guild"><div class="guildico">✦</div><h3>Experience</h3><p><span class="lang zh">活动、旅行、游戏、城市体验。</span><span class="lang en">Events, trips, games, city experiences.</span><span class="lang th">กิจกรรม ทริป เกม ประสบการณ์เมือง</span><span class="lang es">Eventos, viajes, juegos, experiencias.</span><span class="lang ko">행사, 여행, 게임, 도시 경험.</span></p></div>
+        <div class="guild"><div class="guildico">⌁</div><h3>Connection</h3><p><span class="lang zh">校友、企业、嘉宾、资源。</span><span class="lang en">Alumni, companies, guests, resources.</span><span class="lang th">ศิษย์เก่า บริษัท แขก ทรัพยากร</span><span class="lang es">Alumni, empresas, invitados, recursos.</span><span class="lang ko">동문, 기업, 게스트, 자원.</span></p></div>
+        <div class="guild"><div class="guildico">⌖</div><h3>Knowledge</h3><p><span class="lang zh">Workshop、Skill Swap、行业知识。</span><span class="lang en">Workshops, skill swaps, industry knowledge.</span><span class="lang th">เวิร์กช็อป แลกทักษะ ความรู้</span><span class="lang es">Talleres, intercambio de habilidades.</span><span class="lang ko">워크숍, 스킬 스왑, 산업 지식.</span></p></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- PROFILE -->
+  <main id="profile" class="page">
+    <section class="page-title">
+      <div class="eyebrow">FOUNDER DOSSIER</div>
+      <h1><span class="lang zh">每个人都有一个 Hidden World。</span><span class="lang en">Everyone has a hidden world.</span><span class="lang th">ทุกคนมี Hidden World ของตัวเอง</span><span class="lang es">Todo el mundo tiene un mundo oculto.</span><span class="lang ko">모두에게 Hidden World가 있습니다.</span></h1>
+      <p><span class="lang zh">这里不是 LinkedIn。我们更想知道：这个人身上还有什么你不知道的世界？</span><span class="lang en">This is not LinkedIn. We care about the worlds in someone you haven't discovered yet.</span><span class="lang th">นี่ไม่ใช่ LinkedIn เราสนใจโลกในตัวคนที่คุณยังไม่เคยค้นพบ</span><span class="lang es">Esto no es LinkedIn. Nos importan los mundos de una persona que aún no has descubierto.</span><span class="lang ko">LinkedIn이 아닙니다. 아직 발견하지 못한 사람의 세계를 봅니다.</span></p>
+    </section>
+    <div class="profile-box">
+      <div class="profile-head"><div class="portrait">QY</div><div><h3>邱雨萌</h3><div class="sub">Founder · Internet / Finance</div></div></div>
+      <div class="hidden"><b>HIDDEN WORLD</b><ul><li>恰巴塔百分百成功秘籍</li><li>小众冷门书籍收藏</li><li>野生心理 & 情感咨询</li></ul></div>
+    </div>
+    <div class="profile-box">
+      <div class="profile-head"><div class="portrait">ZY</div><div><h3>赵镜渊</h3><div class="sub">Founder</div></div></div>
+      <div class="hidden"><b>HIDDEN WORLD</b><ul><li>观鸟</li><li>城市自然观察</li></ul></div>
+    </div>
+  </main>
+
+  <nav class="nav">
+    <label for="page-home"><span class="ico">⌂</span><span class="lang zh">首页</span><span class="lang en">Home</span><span class="lang th">หน้าแรก</span><span class="lang es">Inicio</span><span class="lang ko">홈</span></label>
+    <label for="page-quests"><span class="ico">☷</span><span class="lang zh">任务</span><span class="lang en">Quests</span><span class="lang th">ภารกิจ</span><span class="lang es">Quests</span><span class="lang ko">퀘스트</span></label>
+    <label for="page-market"><span class="ico">⌕</span><span class="lang zh">市场</span><span class="lang en">Market</span><span class="lang th">ตลาด</span><span class="lang es">Mercado</span><span class="lang ko">마켓</span></label>
+    <label for="page-auction"><span class="ico">♢</span><span class="lang zh">拍卖</span><span class="lang en">Auction</span><span class="lang th">ประมูล</span><span class="lang es">Subasta</span><span class="lang ko">경매</span></label>
+    <label for="page-guilds"><span class="ico">◉</span><span class="lang zh">公会</span><span class="lang en">Guilds</span><span class="lang th">กิลด์</span><span class="lang es">Guilds</span><span class="lang ko">길드</span></label>
+  </nav>
+</div>
+</body>
+</html>
