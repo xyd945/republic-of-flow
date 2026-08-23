@@ -320,7 +320,7 @@ export default function AdminPage() {
                     <Avatar initials={m.matched?.initials ?? '?'} id={m.matched_profile_id} size={28} />
                     <div className="flex-1 min-w-0">
                       <div className="font-serif font-semibold text-xs text-ink truncate">
-                        {m.initiator?.full_name} &amp; {m.matched?.full_name}
+                        {m.initiator?.full_name ?? ui('common.unknown_member')} &amp; {m.matched?.full_name ?? ui('common.unknown_member')}
                       </div>
                       <div className="font-serif text-xs text-faint truncate">{t(m.listing?.title)}</div>
                     </div>

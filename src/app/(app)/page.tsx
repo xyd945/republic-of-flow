@@ -209,7 +209,7 @@ export default function HomePage() {
                 </Chip>
               </div>
               <div className="font-serif font-semibold text-sm text-ink truncate">{t(listing.title)}</div>
-              <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name}</div>
+              <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name ?? ui('common.unknown_member')}</div>
             </div>
             <Icon name="chevron-right" size={14} color="var(--color-faint)" className="mt-1" />
           </button>

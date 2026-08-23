@@ -252,6 +252,7 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
 
   // Shared
   'common.sending': { en: 'Sending...', zh: '发送中…' },
+  'common.unknown_member': { en: 'Unknown member', zh: '未知成员' },
 };
 
 export function ui(key: string, lang: Language = 'en'): string {

@@ -114,7 +114,7 @@ function SentRow({ listing }: { listing: ListingWithCreator }) {
       <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={30} />
       <div className="flex-1 min-w-0">
         <div className="font-serif font-semibold text-xs text-ink truncate">{t(listing.title)}</div>
-        <div className="font-serif text-xs text-faint truncate">{listing.creator?.full_name}</div>
+        <div className="font-serif text-xs text-faint truncate">{listing.creator?.full_name ?? ui('common.unknown_member')}</div>
       </div>
       <Chip variant="wash" tone={tone}>{label}</Chip>
     </div>
@@ -165,7 +165,7 @@ function MarketCard({
             </span>
           </div>
           <div className="font-serif font-semibold text-base text-ink leading-[1.35]">{t(listing.title)}</div>
-          <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name}</div>
+          <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name ?? ui('common.unknown_member')}</div>
         </div>
       </div>
       <div className="font-serif text-sm text-muted leading-[1.6] mb-3">{t(listing.description)}</div>
@@ -265,7 +265,7 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
         <div className="font-serif text-sm text-muted">&harr;</div>
         <Avatar initials={match.matched?.initials ?? '?'} id={match.matched_profile_id} size={36} />
         <div className="flex-1 min-w-0">
-          <div className="font-serif font-semibold text-sm text-ink">{match.initiator?.full_name} & {match.matched?.full_name}</div>
+          <div className="font-serif font-semibold text-sm text-ink">{match.initiator?.full_name ?? ui('common.unknown_member')} & {match.matched?.full_name ?? ui('common.unknown_member')}</div>
           <div className="font-serif text-xs text-muted truncate">{t(match.listing?.title)}</div>
         </div>
       </div>
