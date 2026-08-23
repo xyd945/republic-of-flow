@@ -205,7 +205,7 @@ export default function HomePage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-[3px]">
                 <Chip variant="wash" tone={listing.type === 'wanted' ? 'red' : 'green'}>
-                  {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offers')}
+                  {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offer_one')}
                 </Chip>
               </div>
               <div className="font-serif font-semibold text-sm text-ink truncate">{t(listing.title)}</div>

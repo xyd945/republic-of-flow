@@ -284,7 +284,7 @@ export default function AdminPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-[2px]">
                     <Chip variant="wash" tone={l.type === 'wanted' ? 'red' : 'green'}>
-                      {l.type === 'wanted' ? ui('market.wanted') : ui('market.offers')}
+                      {l.type === 'wanted' ? ui('market.wanted') : ui('market.offer_one')}
                     </Chip>
                     <Badge tone={l.status === 'open' ? 'green' : 'neutral'}>{l.status}</Badge>
                   </div>

@@ -94,6 +94,28 @@ function RequestRow({
   );
 }
 
+/** A listing you raised a hand on, with where that request now stands. */
+function SentRow({ listing }: { listing: ListingWithCreator }) {
+  const { t, ui } = useI18n();
+  const s = listing.viewer_interest_status;
+  const [label, tone] =
+    s === 'accepted' ? [ui('market.youre_matched'), 'green' as const]
+    : s === 'declined' ? [ui('market.not_selected'), 'neutral' as const]
+    : listing.status === 'matched' ? [ui('market.already_matched'), 'neutral' as const]
+    : [ui('market.interest_sent'), 'neutral' as const];
+
+  return (
+    <div className="flex items-center gap-3 p-[10px] rounded-xs border border-line">
+      <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={30} />
+      <div className="flex-1 min-w-0">
+        <div className="font-serif font-semibold text-xs text-ink truncate">{t(listing.title)}</div>
+        <div className="font-serif text-xs text-faint truncate">{listing.creator?.full_name}</div>
+      </div>
+      <Chip variant="wash" tone={tone}>{label}</Chip>
+    </div>
+  );
+}
+
 function MarketCard({
   listing,
   viewerProfileId,
@@ -129,7 +151,7 @@ function MarketCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-[2px]">
             <Chip variant="wash" tone={listing.type === 'wanted' ? 'red' : 'green'}>
-              {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offers')}
+              {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offer_one')}
             </Chip>
             {/* Status, not a count: RLS hides other members' interest rows, so
                 any number rendered to a non-owner would be wrong. */}
@@ -425,6 +447,17 @@ export default function MarketPage() {
   // Closed matches are history — the curator desk shows them, members don't.
   const liveMatches = matches.filter((m) => m.status !== 'closed');
 
+  // Requests are otherwise only visible inline on your own card, buried among
+  // everyone else's listings — this is the one place you can reliably find them.
+  const myListings = listings.filter((l) => l.creator_profile_id === viewerProfileId);
+  const mySent = listings.filter(
+    (l) => l.viewer_interest_status !== null && l.creator_profile_id !== viewerProfileId,
+  );
+  const awaitingReply = myListings.reduce(
+    (n, l) => n + (l.status === 'matched' ? 0 : l.interests.filter((i) => i.status === 'pending').length),
+    0,
+  );
+
   /**
    * Accepting is three writes with no transaction available over PostgREST, so
    * the match row goes first: if it fails nothing has changed and a retry is
@@ -505,6 +538,7 @@ export default function MarketPage() {
         items={[
           { id: 'wanted', label: ui('market.wanted') },
           { id: 'offer', label: ui('market.offers') },
+          { id: 'mine', label: awaitingReply > 0 ? `${ui('market.mine')} (${awaitingReply})` : ui('market.mine') },
           { id: 'matches', label: ui('market.matches') },
         ]}
         value={tab}
@@ -542,6 +576,47 @@ export default function MarketPage() {
               onReject={rejectInterest}
             />
           ))}
+        </div>
+      )}
+
+      {tab === 'mine' && (
+        <div>
+          <div className="flex items-baseline justify-between mb-[10px]">
+            <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze">
+              {ui('market.received')}
+            </span>
+            {awaitingReply > 0 && (
+              <span className="font-serif text-xs text-red">
+                {awaitingReply} {ui('market.awaiting_you')}
+              </span>
+            )}
+          </div>
+          {myListings.length === 0 ? (
+            <div className="font-serif text-sm text-muted mb-6">{ui('market.nothing_posted')}</div>
+          ) : (
+            myListings.map((l) => (
+              <MarketCard
+                key={l.id}
+                listing={l}
+                viewerProfileId={viewerProfileId}
+                busy={busy}
+                onInterest={() => setInterestFor(l)}
+                onAccept={(i) => acceptInterest(l, i)}
+                onReject={rejectInterest}
+              />
+            ))
+          )}
+
+          <div className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mt-6 mb-[10px]">
+            {ui('market.sent')}
+          </div>
+          {mySent.length === 0 ? (
+            <div className="font-serif text-sm text-muted pb-6">{ui('market.nothing_sent')}</div>
+          ) : (
+            <div className="flex flex-col gap-[8px] pb-6">
+              {mySent.map((l) => <SentRow key={l.id} listing={l} />)}
+            </div>
+          )}
         </div>
       )}
 
