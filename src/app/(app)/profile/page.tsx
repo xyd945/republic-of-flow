@@ -419,7 +419,7 @@ export default function ProfilePage() {
 
       {/* Sticky save */}
       <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-[18px] pb-3 pt-2 bg-white/90 backdrop-blur-md border-t border-line z-40">
-        <Button tone="ink" onClick={handleSave} disabled={saving} icon={<Icon name="check" size={15} color="#fff" />}>
+        <Button tone="ink" onClick={handleSave} loading={saving} icon={<Icon name="check" size={15} color="#fff" />}>
           {saving ? ui('profile.saving') : saved ? ui('profile.saved') : ui('profile.save')}
         </Button>
       </div>

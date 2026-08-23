@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Avatar, Icon, Chip, Button } from '@/components/ui';
+import { Avatar, Icon, Chip, Button, Spinner } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
 import { useDirectory } from '@/lib/supabase/directory';
 import { createClient } from '@/lib/supabase/client';
@@ -32,18 +32,23 @@ function Segmented({ items, value, onChange }: { items: { id: string; label: str
 function RequestRow({
   interest,
   actionable,
-  busy,
+  busyKey,
   onAccept,
   onReject,
 }: {
   interest: ListingInterest;
   actionable: boolean;
-  busy: boolean;
+  busyKey: string | null;
   onAccept: () => void;
   onReject: () => void;
 }) {
   const { t, ui } = useI18n();
   const settled = interest.status === 'accepted' || interest.status === 'declined';
+  const accepting = busyKey === `${interest.id}:accept`;
+  const rejecting = busyKey === `${interest.id}:reject`;
+  // Any write in flight locks every control, so a second click can't race the
+  // three-step accept — but only the one you pressed shows a spinner.
+  const locked = busyKey !== null;
 
   return (
     <div
@@ -71,22 +76,22 @@ function RequestRow({
           <button
             type="button"
             title={ui('market.accept')}
-            disabled={busy}
+            disabled={locked}
             onClick={onAccept}
             className="w-7 h-7 grid place-items-center rounded-full cursor-pointer bg-transparent"
-            style={{ border: '1px solid var(--color-green)' }}
+            style={{ border: '1px solid var(--color-green)', opacity: locked && !accepting ? 0.4 : 1 }}
           >
-            <Icon name="check" size={13} color="var(--color-green)" />
+            {accepting ? <Spinner size={12} color="var(--color-green)" /> : <Icon name="check" size={13} color="var(--color-green)" />}
           </button>
           <button
             type="button"
             title={ui('market.reject')}
-            disabled={busy}
+            disabled={locked}
             onClick={onReject}
             className="w-7 h-7 grid place-items-center rounded-full cursor-pointer bg-transparent"
-            style={{ border: '1px solid var(--color-line)' }}
+            style={{ border: '1px solid var(--color-line)', opacity: locked && !rejecting ? 0.4 : 1 }}
           >
-            <Icon name="x" size={13} color="var(--color-faint)" />
+            {rejecting ? <Spinner size={12} color="var(--color-faint)" /> : <Icon name="x" size={13} color="var(--color-faint)" />}
           </button>
         </div>
       ) : null}
@@ -94,17 +99,39 @@ function RequestRow({
   );
 }
 
+/** A listing you raised a hand on, with where that request now stands. */
+function SentRow({ listing }: { listing: ListingWithCreator }) {
+  const { t, ui } = useI18n();
+  const s = listing.viewer_interest_status;
+  const [label, tone] =
+    s === 'accepted' ? [ui('market.youre_matched'), 'green' as const]
+    : s === 'declined' ? [ui('market.not_selected'), 'neutral' as const]
+    : listing.status === 'matched' ? [ui('market.already_matched'), 'neutral' as const]
+    : [ui('market.interest_sent'), 'neutral' as const];
+
+  return (
+    <div className="flex items-center gap-3 p-[10px] rounded-xs border border-line">
+      <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={30} />
+      <div className="flex-1 min-w-0">
+        <div className="font-serif font-semibold text-xs text-ink truncate">{t(listing.title)}</div>
+        <div className="font-serif text-xs text-faint truncate">{listing.creator?.full_name}</div>
+      </div>
+      <Chip variant="wash" tone={tone}>{label}</Chip>
+    </div>
+  );
+}
+
 function MarketCard({
   listing,
   viewerProfileId,
-  busy,
+  busyKey,
   onInterest,
   onAccept,
   onReject,
 }: {
   listing: ListingWithCreator;
   viewerProfileId: string | null;
-  busy: boolean;
+  busyKey: string | null;
   onInterest: () => void;
   onAccept: (i: ListingInterest) => void;
   onReject: (i: ListingInterest) => void;
@@ -129,7 +156,7 @@ function MarketCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-[2px]">
             <Chip variant="wash" tone={listing.type === 'wanted' ? 'red' : 'green'}>
-              {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offers')}
+              {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offer_one')}
             </Chip>
             {/* Status, not a count: RLS hides other members' interest rows, so
                 any number rendered to a non-owner would be wrong. */}
@@ -166,7 +193,7 @@ function MarketCard({
                     key={i.id}
                     interest={i}
                     actionable={!isMatched}
-                    busy={busy}
+                    busyKey={busyKey}
                     onAccept={() => onAccept(i)}
                     onReject={() => onReject(i)}
                   />
@@ -249,7 +276,7 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
           </div>
         </div>
       )}
-      <Button tone="green" size="sm" onClick={markMet} disabled={busy || done} icon={<Icon name="check" size={13} color="#fff" />}>
+      <Button tone="green" size="sm" onClick={markMet} loading={busy} disabled={done} icon={<Icon name="check" size={13} color="#fff" />}>
         {done ? ui('market.met') : busy ? ui('market.saving') : ui('market.we_met')}
       </Button>
     </div>
@@ -322,7 +349,7 @@ function InterestModal({
             <Icon name="x" size={14} color="var(--color-red)" />{error}
           </div>
         )}
-        <Button tone="bronze" onClick={send} disabled={busy} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
+        <Button tone="bronze" onClick={send} loading={busy} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
           {busy ? ui('market.sending') : ui('market.send_interest')}
         </Button>
       </div>
@@ -403,7 +430,7 @@ function PublishModal({
             <Icon name="x" size={14} color="var(--color-red)" />{error}
           </div>
         )}
-        <Button tone="ink" onClick={publish} disabled={busy} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
+        <Button tone="ink" onClick={publish} loading={busy} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
           {busy ? ui('market.publishing') : ui('market.publish')}
         </Button>
       </div>
@@ -417,13 +444,26 @@ export default function MarketPage() {
   const [tab, setTab] = useState('wanted');
   const [interestFor, setInterestFor] = useState<ListingWithCreator | null>(null);
   const [showPublish, setShowPublish] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // Which control is mid-write, e.g. `<interestId>:accept`. A plain boolean
+  // would spin every button on the page at once.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const wanted = listings.filter((l) => l.type === 'wanted');
   const offers = listings.filter((l) => l.type === 'offer');
   // Closed matches are history — the curator desk shows them, members don't.
   const liveMatches = matches.filter((m) => m.status !== 'closed');
+
+  // Requests are otherwise only visible inline on your own card, buried among
+  // everyone else's listings — this is the one place you can reliably find them.
+  const myListings = listings.filter((l) => l.creator_profile_id === viewerProfileId);
+  const mySent = listings.filter(
+    (l) => l.viewer_interest_status !== null && l.creator_profile_id !== viewerProfileId,
+  );
+  const awaitingReply = myListings.reduce(
+    (n, l) => n + (l.status === 'matched' ? 0 : l.interests.filter((i) => i.status === 'pending').length),
+    0,
+  );
 
   /**
    * Accepting is three writes with no transaction available over PostgREST, so
@@ -433,7 +473,7 @@ export default function MarketPage() {
    */
   const acceptInterest = async (listing: ListingWithCreator, interest: ListingInterest) => {
     if (!viewerProfileId) return;
-    setBusy(true);
+    setBusyKey(`${interest.id}:accept`);
     setError('');
     const supabase = createClient();
 
@@ -448,33 +488,33 @@ export default function MarketPage() {
         status: 'connected',
         source: 'self',
       });
-      if (mErr) { setBusy(false); setError(mErr.message); return; }
+      if (mErr) { setBusyKey(null); setError(mErr.message); return; }
     }
 
     const { error: iErr } = await supabase
       .from('market_interests')
       .update({ status: 'accepted' })
       .eq('id', interest.id);
-    if (iErr) { setBusy(false); setError(iErr.message); return; }
+    if (iErr) { setBusyKey(null); setError(iErr.message); return; }
 
     const { error: lErr } = await supabase
       .from('market_listings')
       .update({ status: 'matched' })
       .eq('id', listing.id);
-    if (lErr) { setBusy(false); setError(lErr.message); return; }
+    if (lErr) { setBusyKey(null); setError(lErr.message); return; }
 
-    setBusy(false);
+    setBusyKey(null);
     refetch();
   };
 
   const rejectInterest = async (interest: ListingInterest) => {
-    setBusy(true);
+    setBusyKey(`${interest.id}:reject`);
     setError('');
     const { error: err } = await createClient()
       .from('market_interests')
       .update({ status: 'declined' })
       .eq('id', interest.id);
-    setBusy(false);
+    setBusyKey(null);
     if (err) { setError(err.message); return; }
     refetch();
   };
@@ -505,6 +545,7 @@ export default function MarketPage() {
         items={[
           { id: 'wanted', label: ui('market.wanted') },
           { id: 'offer', label: ui('market.offers') },
+          { id: 'mine', label: awaitingReply > 0 ? `${ui('market.mine')} (${awaitingReply})` : ui('market.mine') },
           { id: 'matches', label: ui('market.matches') },
         ]}
         value={tab}
@@ -519,7 +560,7 @@ export default function MarketPage() {
               key={l.id}
               listing={l}
               viewerProfileId={viewerProfileId}
-              busy={busy}
+              busyKey={busyKey}
               onInterest={() => setInterestFor(l)}
               onAccept={(i) => acceptInterest(l, i)}
               onReject={rejectInterest}
@@ -536,12 +577,53 @@ export default function MarketPage() {
               key={l.id}
               listing={l}
               viewerProfileId={viewerProfileId}
-              busy={busy}
+              busyKey={busyKey}
               onInterest={() => setInterestFor(l)}
               onAccept={(i) => acceptInterest(l, i)}
               onReject={rejectInterest}
             />
           ))}
+        </div>
+      )}
+
+      {tab === 'mine' && (
+        <div>
+          <div className="flex items-baseline justify-between mb-[10px]">
+            <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze">
+              {ui('market.received')}
+            </span>
+            {awaitingReply > 0 && (
+              <span className="font-serif text-xs text-red">
+                {awaitingReply} {ui('market.awaiting_you')}
+              </span>
+            )}
+          </div>
+          {myListings.length === 0 ? (
+            <div className="font-serif text-sm text-muted mb-6">{ui('market.nothing_posted')}</div>
+          ) : (
+            myListings.map((l) => (
+              <MarketCard
+                key={l.id}
+                listing={l}
+                viewerProfileId={viewerProfileId}
+                busyKey={busyKey}
+                onInterest={() => setInterestFor(l)}
+                onAccept={(i) => acceptInterest(l, i)}
+                onReject={rejectInterest}
+              />
+            ))
+          )}
+
+          <div className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mt-6 mb-[10px]">
+            {ui('market.sent')}
+          </div>
+          {mySent.length === 0 ? (
+            <div className="font-serif text-sm text-muted pb-6">{ui('market.nothing_sent')}</div>
+          ) : (
+            <div className="flex flex-col gap-[8px] pb-6">
+              {mySent.map((l) => <SentRow key={l.id} listing={l} />)}
+            </div>
+          )}
         </div>
       )}
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode, type ButtonHTMLAttributes } from 'react';
+import { Spinner } from './spinner';
 
 type Tone = 'ink' | 'bronze' | 'red' | 'green';
 type Variant = 'solid' | 'outline';
@@ -31,6 +32,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
   block?: boolean;
   icon?: ReactNode;
+  /** Swaps the icon for a spinner and disables the button while a write is in flight. */
+  loading?: boolean;
   children: ReactNode;
 }
 
@@ -40,12 +43,14 @@ export function Button({
   size = 'default',
   block = true,
   icon,
+  loading = false,
   children,
   className = '',
   disabled,
   ...props
 }: ButtonProps) {
   const colors = toneMap[tone]?.[variant] ?? toneMap.ink.solid;
+  const isDisabled = disabled || loading;
   const pad = size === 'sm' ? 'py-[7px] px-3 text-xs' : 'py-[11px] px-3 text-xs';
 
   return (
@@ -56,13 +61,13 @@ export function Button({
         transition-opacity duration-200
         ${colors} ${pad}
         ${block ? 'w-full' : ''}
-        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+        ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
         ${className}
       `}
-      disabled={disabled}
+      disabled={isDisabled}
       {...props}
     >
-      {icon}
+      {loading ? <Spinner size={14} /> : icon}
       {children}
     </button>
   );
