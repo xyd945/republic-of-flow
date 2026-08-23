@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Badge, Button, Chip } from '@/components/ui';
+import { Avatar, Icon, Badge, Button, Chip, Spinner } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
 import { useDirectory } from '@/lib/supabase/directory';
 import { createClient } from '@/lib/supabase/client';
@@ -61,7 +61,8 @@ export default function AdminPage() {
   const [inviteRole, setInviteRole] = useState('');
   const [inviteState, setInviteState] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
   const [matchState, setMatchState] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Per-control, so one write doesn't disable every button on the desk.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const me = profiles.find((p) => p.id === viewerProfileId);
   const isCurator = me?.is_curator ?? false;
@@ -92,10 +93,10 @@ export default function AdminPage() {
   const wantedCount = listings.filter((l) => l.type === 'wanted').length;
   const offerCount = listings.filter((l) => l.type === 'offer').length;
 
-  const patchProfile = async (id: string, patch: Record<string, unknown>) => {
-    setBusy(true);
+  const patchProfile = async (id: string, patch: Record<string, unknown>, key: string) => {
+    setBusyKey(key);
     await createClient().from('profiles').update(patch).eq('id', id);
-    setBusy(false);
+    setBusyKey(null);
     refetch();
   };
 
@@ -105,11 +106,11 @@ export default function AdminPage() {
    * are deliberately left alone — the owner already made that call.
    */
   const dismatch = async (match: MatchWithParties) => {
-    setBusy(true);
+    setBusyKey(`${match.id}:dismatch`);
     const supabase = createClient();
 
     const { error } = await supabase.from('matches').update({ status: 'closed' }).eq('id', match.id);
-    if (error) { setBusy(false); setMatchState({ tone: 'err', msg: error.message }); return; }
+    if (error) { setBusyKey(null); setMatchState({ tone: 'err', msg: error.message }); return; }
 
     if (match.listing_id) {
       await supabase.from('market_listings').update({ status: 'open' }).eq('id', match.listing_id);
@@ -121,7 +122,7 @@ export default function AdminPage() {
         .eq('status', 'accepted');
     }
 
-    setBusy(false);
+    setBusyKey(null);
     setMatchState({ tone: 'ok', msg: ui('admin.dismatched') });
     refetch();
   };
@@ -131,7 +132,7 @@ export default function AdminPage() {
       setSuggestState({ tone: 'err', msg: ui('admin.pick_both') });
       return;
     }
-    setBusy(true);
+    setBusyKey('suggest');
     const { error } = await createClient()
       .from('market_listings')
       .update({
@@ -139,7 +140,7 @@ export default function AdminPage() {
         suggested_reason: suggestReason.trim() ? { [lang]: suggestReason.trim() } : null,
       })
       .eq('id', suggestListing);
-    setBusy(false);
+    setBusyKey(null);
     if (error) { setSuggestState({ tone: 'err', msg: error.message }); return; }
     setSuggestState({ tone: 'ok', msg: ui('admin.suggestion_sent') });
     setSuggestListing('');
@@ -154,7 +155,7 @@ export default function AdminPage() {
       setInviteState({ tone: 'err', msg: ui('auth.valid_email') });
       return;
     }
-    setBusy(true);
+    setBusyKey('invite');
     setInviteState(null);
     try {
       const res = await fetch('/api/admin/invite', {
@@ -171,7 +172,7 @@ export default function AdminPage() {
     } catch (e) {
       setInviteState({ tone: 'err', msg: e instanceof Error ? e.message : ui('admin.invitation_failed') });
     } finally {
-      setBusy(false);
+      setBusyKey(null);
     }
   };
 
@@ -224,8 +225,8 @@ export default function AdminPage() {
                   <div className="font-serif font-semibold text-sm text-ink truncate">{p.full_name}</div>
                   <select
                     value={CLASSES.includes(p.class_name as ClassName) ? p.class_name : ''}
-                    disabled={busy}
-                    onChange={(e) => patchProfile(p.id, { class_name: e.target.value })}
+                    disabled={busyKey !== null}
+                    onChange={(e) => patchProfile(p.id, { class_name: e.target.value }, `${p.id}:class`)}
                     className="font-serif text-eyebrow text-faint bg-transparent border-none cursor-pointer p-0 -ml-[2px]"
                   >
                     {!CLASSES.includes(p.class_name as ClassName) && (
@@ -240,8 +241,8 @@ export default function AdminPage() {
                   <button
                     type="button"
                     title={p.is_featured ? ui('admin.unfeature') : ui('admin.feature')}
-                    disabled={busy}
-                    onClick={() => patchProfile(p.id, { is_featured: !p.is_featured })}
+                    disabled={busyKey !== null}
+                    onClick={() => patchProfile(p.id, { is_featured: !p.is_featured }, `${p.id}:feat`)}
                     className="w-7 h-7 grid place-items-center rounded-full cursor-pointer"
                     style={{
                       background: p.is_featured ? 'var(--color-bronze-wash)' : 'transparent',
@@ -250,21 +251,29 @@ export default function AdminPage() {
                   >
                     {/* Filled vs hollow — bronze and faint are too close in
                         brightness to read as an on/off state on their own. */}
-                    <Icon
-                      name="star"
-                      size={13}
-                      color={p.is_featured ? 'var(--color-bronze)' : 'var(--color-faint)'}
-                      fill={p.is_featured ? 'var(--color-bronze)' : 'none'}
-                    />
+                    {busyKey === `${p.id}:feat` ? (
+                      <Spinner size={12} color="var(--color-bronze)" />
+                    ) : (
+                      <Icon
+                        name="star"
+                        size={13}
+                        color={p.is_featured ? 'var(--color-bronze)' : 'var(--color-faint)'}
+                        fill={p.is_featured ? 'var(--color-bronze)' : 'none'}
+                      />
+                    )}
                   </button>
                   <button
                     type="button"
                     title={p.is_active ? ui('admin.deactivate') : ui('admin.activate')}
-                    disabled={busy}
-                    onClick={() => patchProfile(p.id, { is_active: !p.is_active })}
+                    disabled={busyKey !== null}
+                    onClick={() => patchProfile(p.id, { is_active: !p.is_active }, `${p.id}:active`)}
                     className="w-7 h-7 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer"
                   >
-                    <span className="w-2 h-2 rounded-full" style={{ background: p.is_active ? 'var(--color-green)' : 'var(--color-faint)' }} />
+                    {busyKey === `${p.id}:active` ? (
+                      <Spinner size={12} color="var(--color-green)" />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full" style={{ background: p.is_active ? 'var(--color-green)' : 'var(--color-faint)' }} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -284,7 +293,7 @@ export default function AdminPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-[2px]">
                     <Chip variant="wash" tone={l.type === 'wanted' ? 'red' : 'green'}>
-                      {l.type === 'wanted' ? ui('market.wanted') : ui('market.offers')}
+                      {l.type === 'wanted' ? ui('market.wanted') : ui('market.offer_one')}
                     </Chip>
                     <Badge tone={l.status === 'open' ? 'green' : 'neutral'}>{l.status}</Badge>
                   </div>
@@ -318,8 +327,8 @@ export default function AdminPage() {
                     {closed ? (
                       <Chip variant="wash" tone="neutral">{ui('admin.match_closed')}</Chip>
                     ) : (
-                      <Button tone="red" variant="outline" size="sm" block={false} disabled={busy} onClick={() => dismatch(m)}>
-                        {busy ? ui('admin.dismatching') : ui('admin.dismatch')}
+                      <Button tone="red" variant="outline" size="sm" block={false} loading={busyKey === `${m.id}:dismatch`} disabled={busyKey !== null} onClick={() => dismatch(m)}>
+                        {busyKey === `${m.id}:dismatch` ? ui('admin.dismatching') : ui('admin.dismatch')}
                       </Button>
                     )}
                   </div>
@@ -364,8 +373,8 @@ export default function AdminPage() {
                 className="parch-input"
               />
             </label>
-            <Button tone="bronze" onClick={sendSuggestion} disabled={busy} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
-              {busy ? ui('common.sending') : ui('admin.send_suggestion')}
+            <Button tone="bronze" onClick={sendSuggestion} loading={busyKey === 'suggest'} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
+              {busyKey === 'suggest' ? ui('common.sending') : ui('admin.send_suggestion')}
             </Button>
             {suggestState && <Notice tone={suggestState.tone}>{suggestState.msg}</Notice>}
           </div>
@@ -385,8 +394,8 @@ export default function AdminPage() {
               <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{ui('admin.role_context')}</span>
               <input type="text" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} placeholder={ui('admin.role_placeholder')} className="parch-input" />
             </label>
-            <Button tone="ink" onClick={sendInvite} disabled={busy} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
-              {busy ? ui('common.sending') : ui('admin.send_invitation')}
+            <Button tone="ink" onClick={sendInvite} loading={busyKey === 'invite'} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
+              {busyKey === 'invite' ? ui('common.sending') : ui('admin.send_invitation')}
             </Button>
             {inviteState && <Notice tone={inviteState.tone}>{inviteState.msg}</Notice>}
           </div>
