@@ -29,6 +29,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/**
+ * Editing counterpart to i18n `t()`, and deliberately stricter: it must NOT
+ * fall through to another language. An empty field means "no translation yet
+ * in this language" — borrowing the Chinese text here would save it straight
+ * into the English field on the next save.
+ */
 function tVal(obj: Translatable | string | null | undefined, lang: Language): string {
   if (!obj) return '';
   if (typeof obj === 'string') return obj;

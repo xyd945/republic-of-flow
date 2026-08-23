@@ -6,10 +6,22 @@ export const LANGUAGES: { code: Language; label: string }[] = [
   { code: 'zh', label: '中' },
 ];
 
+/**
+ * Render member-authored text in the reader's language.
+ *
+ * Falls through to whatever translation exists rather than returning empty:
+ * these values are keyed by the UI language at the moment they were typed, so
+ * a listing written while the app was in Chinese has only a `zh` key. Stopping
+ * at `en` made those titles and descriptions render blank — the post simply
+ * vanished for English readers. Showing the original is always better than
+ * showing nothing.
+ */
 export function t(obj: Translatable | string | null | undefined, lang: Language = 'en'): string {
   if (!obj) return '';
   if (typeof obj === 'string') return obj;
-  return obj[lang] ?? obj.en ?? '';
+  if (obj[lang]) return obj[lang];
+  if (obj.en) return obj.en;
+  return Object.values(obj).find((v) => typeof v === 'string' && v.trim()) ?? '';
 }
 
 export const CATEGORIES = [
