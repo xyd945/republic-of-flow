@@ -46,8 +46,9 @@ function RequestRow({
   const settled = interest.status === 'accepted' || interest.status === 'declined';
   const accepting = busyKey === `${interest.id}:accept`;
   const rejecting = busyKey === `${interest.id}:reject`;
-  // Any write in flight locks every control, so a second click can't race the
-  // three-step accept — but only the one you pressed shows a spinner.
+  // Any write in flight locks every control — the database serializes accepts
+  // now, but locking avoids firing a request that is certain to be rejected.
+  // Only the button you pressed shows a spinner.
   const locked = busyKey !== null;
 
   return (
@@ -114,7 +115,7 @@ function SentRow({ listing }: { listing: ListingWithCreator }) {
       <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={30} />
       <div className="flex-1 min-w-0">
         <div className="font-serif font-semibold text-xs text-ink truncate">{t(listing.title)}</div>
-        <div className="font-serif text-xs text-faint truncate">{listing.creator?.full_name}</div>
+        <div className="font-serif text-xs text-faint truncate">{listing.creator?.full_name ?? ui('common.unknown_member')}</div>
       </div>
       <Chip variant="wash" tone={tone}>{label}</Chip>
     </div>
@@ -165,7 +166,7 @@ function MarketCard({
             </span>
           </div>
           <div className="font-serif font-semibold text-base text-ink leading-[1.35]">{t(listing.title)}</div>
-          <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name}</div>
+          <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name ?? ui('common.unknown_member')}</div>
         </div>
       </div>
       <div className="font-serif text-sm text-muted leading-[1.6] mb-3">{t(listing.description)}</div>
@@ -265,7 +266,7 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
         <div className="font-serif text-sm text-muted">&harr;</div>
         <Avatar initials={match.matched?.initials ?? '?'} id={match.matched_profile_id} size={36} />
         <div className="flex-1 min-w-0">
-          <div className="font-serif font-semibold text-sm text-ink">{match.initiator?.full_name} & {match.matched?.full_name}</div>
+          <div className="font-serif font-semibold text-sm text-ink">{match.initiator?.full_name ?? ui('common.unknown_member')} & {match.matched?.full_name ?? ui('common.unknown_member')}</div>
           <div className="font-serif text-xs text-muted truncate">{t(match.listing?.title)}</div>
         </div>
       </div>
@@ -479,49 +480,31 @@ export default function MarketPage() {
    * clean. The insert is guarded against an existing open match so a retry
    * after a partial failure can't produce a duplicate pairing.
    */
-  const acceptInterest = async (listing: ListingWithCreator, interest: ListingInterest) => {
-    if (!viewerProfileId) return;
+  /**
+   * One call each — accept_interest and decline_interest run every write
+   * inside a single database transaction. The listing row is locked there, so
+   * two owners accepting at once queue instead of racing, and a failure part
+   * way through rolls the whole thing back rather than stranding a listing as
+   * matched with no pairing behind it. Ownership is checked inside the
+   * function, which also returns a readable message straight to the UI.
+   */
+  const acceptInterest = async (interest: ListingInterest) => {
     setBusyKey(`${interest.id}:accept`);
     setError('');
-    const supabase = createClient();
-
-    const alreadyMatched = matches.some(
-      (m) => m.listing_id === listing.id && m.status !== 'closed',
-    );
-    if (!alreadyMatched) {
-      const { error: mErr } = await supabase.from('matches').insert({
-        listing_id: listing.id,
-        initiator_profile_id: listing.creator_profile_id,
-        matched_profile_id: interest.profile_id,
-        status: 'connected',
-        source: 'self',
-      });
-      if (mErr) { setBusyKey(null); setError(mErr.message); return; }
-    }
-
-    const { error: iErr } = await supabase
-      .from('market_interests')
-      .update({ status: 'accepted' })
-      .eq('id', interest.id);
-    if (iErr) { setBusyKey(null); setError(iErr.message); return; }
-
-    const { error: lErr } = await supabase
-      .from('market_listings')
-      .update({ status: 'matched' })
-      .eq('id', listing.id);
-    if (lErr) { setBusyKey(null); setError(lErr.message); return; }
-
+    const { error: err } = await createClient().rpc('accept_interest', {
+      p_interest_id: interest.id,
+    });
     setBusyKey(null);
+    if (err) { setError(err.message); return; }
     refetch();
   };
 
   const rejectInterest = async (interest: ListingInterest) => {
     setBusyKey(`${interest.id}:reject`);
     setError('');
-    const { error: err } = await createClient()
-      .from('market_interests')
-      .update({ status: 'declined' })
-      .eq('id', interest.id);
+    const { error: err } = await createClient().rpc('decline_interest', {
+      p_interest_id: interest.id,
+    });
     setBusyKey(null);
     if (err) { setError(err.message); return; }
     refetch();
@@ -570,7 +553,7 @@ export default function MarketPage() {
               viewerProfileId={viewerProfileId}
               busyKey={busyKey}
               onInterest={() => setInterestFor(l)}
-              onAccept={(i) => acceptInterest(l, i)}
+              onAccept={acceptInterest}
               onReject={rejectInterest}
             />
           ))}
@@ -587,7 +570,7 @@ export default function MarketPage() {
               viewerProfileId={viewerProfileId}
               busyKey={busyKey}
               onInterest={() => setInterestFor(l)}
-              onAccept={(i) => acceptInterest(l, i)}
+              onAccept={acceptInterest}
               onReject={rejectInterest}
             />
           ))}
@@ -616,7 +599,7 @@ export default function MarketPage() {
                 viewerProfileId={viewerProfileId}
                 busyKey={busyKey}
                 onInterest={() => setInterestFor(l)}
-                onAccept={(i) => acceptInterest(l, i)}
+                onAccept={acceptInterest}
                 onReject={rejectInterest}
               />
             ))
