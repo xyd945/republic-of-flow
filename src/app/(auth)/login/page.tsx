@@ -97,7 +97,7 @@ export default function LoginPage() {
                 )}
 
                 <div className="mt-5">
-                  <Button tone="ink" onClick={sendCode} disabled={loading} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
+                  <Button tone="ink" onClick={sendCode} loading={loading} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
                     {loading ? ui('auth.sending') : ui('auth.send_code')}
                   </Button>
                 </div>
@@ -136,7 +136,7 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                <Button tone="bronze" onClick={verifyCode} disabled={loading} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
+                <Button tone="bronze" onClick={verifyCode} loading={loading} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
                   {loading ? ui('auth.verifying') : ui('auth.verify')}
                 </Button>
 
