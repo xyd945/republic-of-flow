@@ -226,6 +226,11 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'admin.unfeature': { en: 'Unfeature', zh: '取消精选' },
   'admin.activate': { en: 'Reactivate', zh: '重新启用' },
   'admin.deactivate': { en: 'Deactivate', zh: '停用' },
+  'admin.confirm_deactivate': { en: 'Deactivate this member?', zh: '停用该成员？' },
+  'admin.confirm_deactivate_body': {
+    en: 'They will be hidden from the People directory, and their name will stop appearing on their listings and matches. They can still sign in, and you can reactivate them at any time.',
+    zh: '他们将从成员目录中隐藏，其姓名也不再显示在其发布的信息和配对中。他们仍可登录，你可以随时重新启用。',
+  },
   'admin.suggest_desc': {
     en: 'As a curator, you can suggest a classmate for a “Wanted” listing. The listing owner sees your suggestion with your reason.',
     zh: '作为策展人，你可以为「寻求」信息推荐一位同学。发布者会看到你的推荐及理由。',

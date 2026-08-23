@@ -63,6 +63,9 @@ export default function AdminPage() {
   const [matchState, setMatchState] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
   // Per-control, so one write doesn't disable every button on the desk.
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  // Deactivation is the one action here whose effect the curator can never see
+  // — you always see yourself, and curators always see everyone — so it asks first.
+  const [confirmOff, setConfirmOff] = useState<{ id: string; name: string } | null>(null);
 
   const me = profiles.find((p) => p.id === viewerProfileId);
   const isCurator = me?.is_curator ?? false;
@@ -266,7 +269,11 @@ export default function AdminPage() {
                     type="button"
                     title={p.is_active ? ui('admin.deactivate') : ui('admin.activate')}
                     disabled={busyKey !== null}
-                    onClick={() => patchProfile(p.id, { is_active: !p.is_active }, `${p.id}:active`)}
+                    onClick={() =>
+                      p.is_active
+                        ? setConfirmOff({ id: p.id, name: p.full_name })
+                        : patchProfile(p.id, { is_active: true }, `${p.id}:active`)
+                    }
                     className="w-7 h-7 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer"
                   >
                     {busyKey === `${p.id}:active` ? (
@@ -401,6 +408,42 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {confirmOff && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={() => setConfirmOff(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-[430px] bg-white rounded-t-[18px] p-[22px] animate-sheet"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze mb-3">
+              {ui('admin.confirm_deactivate')}
+            </h3>
+            <div className="flex items-center gap-3 mb-3">
+              <Avatar initials={profiles.find((x) => x.id === confirmOff.id)?.initials ?? '?'} id={confirmOff.id} size={34} />
+              <span className="font-serif font-semibold text-base text-ink">{confirmOff.name}</span>
+            </div>
+            <p className="font-serif text-sm text-muted leading-[1.6] mb-4">
+              {ui('admin.confirm_deactivate_body')}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                tone="red"
+                onClick={() => {
+                  const target = confirmOff;
+                  setConfirmOff(null);
+                  patchProfile(target.id, { is_active: false }, `${target.id}:active`);
+                }}
+              >
+                {ui('admin.deactivate')}
+              </Button>
+              <Button tone="ink" variant="outline" onClick={() => setConfirmOff(null)}>
+                {ui('profile.cancel')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
