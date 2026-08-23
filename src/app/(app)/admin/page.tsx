@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n/context';
 import { useDirectory } from '@/lib/supabase/directory';
 import { createClient } from '@/lib/supabase/client';
 import { CLASSES, type ClassName } from '@/lib/classes';
+import type { MatchWithParties } from '@/types';
 
 function Segmented({ items, value, onChange }: { items: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
   return (
@@ -59,6 +60,7 @@ export default function AdminPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('');
   const [inviteState, setInviteState] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
+  const [matchState, setMatchState] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const me = profiles.find((p) => p.id === viewerProfileId);
@@ -94,6 +96,33 @@ export default function AdminPage() {
     setBusy(true);
     await createClient().from('profiles').update(patch).eq('id', id);
     setBusy(false);
+    refetch();
+  };
+
+  /**
+   * Undo a pairing: close the match, reopen the listing, and put the accepted
+   * request back to pending so the owner can choose again. Rejected requests
+   * are deliberately left alone — the owner already made that call.
+   */
+  const dismatch = async (match: MatchWithParties) => {
+    setBusy(true);
+    const supabase = createClient();
+
+    const { error } = await supabase.from('matches').update({ status: 'closed' }).eq('id', match.id);
+    if (error) { setBusy(false); setMatchState({ tone: 'err', msg: error.message }); return; }
+
+    if (match.listing_id) {
+      await supabase.from('market_listings').update({ status: 'open' }).eq('id', match.listing_id);
+      await supabase
+        .from('market_interests')
+        .update({ status: 'pending' })
+        .eq('listing_id', match.listing_id)
+        .eq('profile_id', match.matched_profile_id)
+        .eq('status', 'accepted');
+    }
+
+    setBusy(false);
+    setMatchState({ tone: 'ok', msg: ui('admin.dismatched') });
     refetch();
   };
 
@@ -177,6 +206,7 @@ export default function AdminPage() {
           items={[
             { id: 'people', label: ui('admin.people') },
             { id: 'listings', label: ui('admin.listings') },
+            { id: 'matches', label: ui('admin.matches') },
             { id: 'suggest', label: ui('admin.suggest') },
             { id: 'invite', label: ui('admin.invite') },
           ]}
@@ -262,6 +292,41 @@ export default function AdminPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Matches tab */}
+        {tab === 'matches' && (
+          <div className="mt-4">
+            <p className="font-serif text-sm text-muted leading-[1.6] mb-4">{ui('admin.matches_desc')}</p>
+            {matches.length === 0 && (
+              <div className="font-serif text-sm text-muted text-center py-8">{ui('admin.no_matches')}</div>
+            )}
+            <div className="flex flex-col gap-[8px]">
+              {matches.map((m) => {
+                const closed = m.status === 'closed';
+                return (
+                  <div key={m.id} className="flex items-center gap-3 p-[10px] rounded-xs border border-line" style={{ opacity: closed ? 0.55 : 1 }}>
+                    <Avatar initials={m.initiator?.initials ?? '?'} id={m.initiator_profile_id} size={28} />
+                    <Avatar initials={m.matched?.initials ?? '?'} id={m.matched_profile_id} size={28} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-serif font-semibold text-xs text-ink truncate">
+                        {m.initiator?.full_name} &amp; {m.matched?.full_name}
+                      </div>
+                      <div className="font-serif text-xs text-faint truncate">{t(m.listing?.title)}</div>
+                    </div>
+                    {closed ? (
+                      <Chip variant="wash" tone="neutral">{ui('admin.match_closed')}</Chip>
+                    ) : (
+                      <Button tone="red" variant="outline" size="sm" block={false} disabled={busy} onClick={() => dismatch(m)}>
+                        {busy ? ui('admin.dismatching') : ui('admin.dismatch')}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {matchState && <Notice tone={matchState.tone}>{matchState.msg}</Notice>}
           </div>
         )}
 

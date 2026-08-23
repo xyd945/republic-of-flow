@@ -5,7 +5,7 @@ import { Avatar, Icon, Chip, Button } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
 import { useDirectory } from '@/lib/supabase/directory';
 import { createClient } from '@/lib/supabase/client';
-import type { ListingWithCreator, MatchWithParties, Language } from '@/types';
+import type { ListingWithCreator, ListingInterest, MatchWithParties, Language } from '@/types';
 
 function Segmented({ items, value, onChange }: { items: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
   return (
@@ -28,17 +28,100 @@ function Segmented({ items, value, onChange }: { items: { id: string; label: str
   );
 }
 
+/** One incoming request, shown only to the listing owner. */
+function RequestRow({
+  interest,
+  actionable,
+  busy,
+  onAccept,
+  onReject,
+}: {
+  interest: ListingInterest;
+  actionable: boolean;
+  busy: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+}) {
+  const { t, ui } = useI18n();
+  const settled = interest.status === 'accepted' || interest.status === 'declined';
+
+  return (
+    <div
+      className="flex items-start gap-[10px] p-[10px] rounded-xs border border-line"
+      style={{ opacity: interest.status === 'declined' || (!actionable && !settled) ? 0.55 : 1 }}
+    >
+      <Avatar initials={interest.profile?.initials ?? '?'} id={interest.profile_id} size={30} />
+      <div className="flex-1 min-w-0">
+        <div className="font-serif font-semibold text-xs text-ink truncate">
+          {interest.profile?.full_name ?? '—'}
+        </div>
+        {interest.message && (
+          <div className="font-serif text-xs text-muted italic leading-[1.45] mt-[2px]">
+            {t(interest.message)}
+          </div>
+        )}
+      </div>
+
+      {interest.status === 'accepted' ? (
+        <Chip variant="wash" tone="green">{ui('market.accepted')}</Chip>
+      ) : interest.status === 'declined' ? (
+        <Chip variant="wash" tone="neutral">{ui('market.rejected')}</Chip>
+      ) : actionable ? (
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            title={ui('market.accept')}
+            disabled={busy}
+            onClick={onAccept}
+            className="w-7 h-7 grid place-items-center rounded-full cursor-pointer bg-transparent"
+            style={{ border: '1px solid var(--color-green)' }}
+          >
+            <Icon name="check" size={13} color="var(--color-green)" />
+          </button>
+          <button
+            type="button"
+            title={ui('market.reject')}
+            disabled={busy}
+            onClick={onReject}
+            className="w-7 h-7 grid place-items-center rounded-full cursor-pointer bg-transparent"
+            style={{ border: '1px solid var(--color-line)' }}
+          >
+            <Icon name="x" size={13} color="var(--color-faint)" />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MarketCard({
   listing,
   viewerProfileId,
+  busy,
   onInterest,
+  onAccept,
+  onReject,
 }: {
   listing: ListingWithCreator;
   viewerProfileId: string | null;
+  busy: boolean;
   onInterest: () => void;
+  onAccept: (i: ListingInterest) => void;
+  onReject: (i: ListingInterest) => void;
 }) {
   const { t, ui } = useI18n();
   const isMine = listing.creator_profile_id === viewerProfileId;
+  const isMatched = listing.status === 'matched';
+  const mine = listing.viewer_interest_status;
+
+  // A non-owner's button reflects where they stand, not just whether they clicked.
+  const viewerLabel = isMatched && mine !== 'accepted'
+    ? (mine === 'declined' ? ui('market.not_selected') : ui('market.already_matched'))
+    : mine === 'accepted' ? ui('market.youre_matched')
+    : mine === 'declined' ? ui('market.not_selected')
+    : mine === 'pending' ? ui('market.interest_sent')
+    : ui('market.interested');
+
   return (
     <div className="sheet p-[16px] mb-3">
       <div className="flex items-start gap-3 mb-[10px]">
@@ -48,11 +131,11 @@ function MarketCard({
             <Chip variant="wash" tone={listing.type === 'wanted' ? 'red' : 'green'}>
               {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offers')}
             </Chip>
-            {listing.capacity && (
-              <span className="font-serif text-eyebrow text-faint">
-                {listing.interests_count ?? 0}/{listing.capacity} {ui('market.spots')}
-              </span>
-            )}
+            {/* Status, not a count: RLS hides other members' interest rows, so
+                any number rendered to a non-owner would be wrong. */}
+            <span className="font-serif text-eyebrow text-faint">
+              {isMatched ? ui('market.status_matched') : ui('market.status_open')}
+            </span>
           </div>
           <div className="font-serif font-semibold text-base text-ink leading-[1.35]">{t(listing.title)}</div>
           <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name}</div>
@@ -64,9 +147,38 @@ function MarketCard({
           <Chip key={i}>{t(chip)}</Chip>
         ))}
       </div>
+
       {isMine ? (
-        <div className="font-serif text-xs text-faint italic">
-          {ui('market.your_listing')} &middot; {listing.interests_count} {ui('market.interested_count')}
+        <div>
+          <div className="flex items-baseline justify-between mb-[8px]">
+            <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze">
+              {ui('market.requests')}
+            </span>
+            <span className="font-serif text-xs text-faint italic">{ui('market.your_listing')}</span>
+          </div>
+          {listing.interests.length === 0 ? (
+            <div className="font-serif text-xs text-faint">{ui('market.no_requests')}</div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-[6px]">
+                {listing.interests.map((i) => (
+                  <RequestRow
+                    key={i.id}
+                    interest={i}
+                    actionable={!isMatched}
+                    busy={busy}
+                    onAccept={() => onAccept(i)}
+                    onReject={() => onReject(i)}
+                  />
+                ))}
+              </div>
+              {!isMatched && listing.interests.some((i) => i.status === 'pending') && (
+                <div className="font-serif text-xs text-faint italic mt-[8px]">
+                  {ui('market.pick_one')}
+                </div>
+              )}
+            </>
+          )}
         </div>
       ) : (
         <Button
@@ -74,10 +186,10 @@ function MarketCard({
           variant="outline"
           size="sm"
           onClick={onInterest}
-          disabled={listing.viewer_interested}
+          disabled={mine !== null || isMatched}
           icon={<Icon name="arrow-right" size={13} color="var(--color-bronze-deep)" />}
         >
-          {listing.viewer_interested ? ui('market.interest_sent') : ui('market.interested')}
+          {viewerLabel}
         </Button>
       )}
 
@@ -305,9 +417,67 @@ export default function MarketPage() {
   const [tab, setTab] = useState('wanted');
   const [interestFor, setInterestFor] = useState<ListingWithCreator | null>(null);
   const [showPublish, setShowPublish] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   const wanted = listings.filter((l) => l.type === 'wanted');
   const offers = listings.filter((l) => l.type === 'offer');
+  // Closed matches are history — the curator desk shows them, members don't.
+  const liveMatches = matches.filter((m) => m.status !== 'closed');
+
+  /**
+   * Accepting is three writes with no transaction available over PostgREST, so
+   * the match row goes first: if it fails nothing has changed and a retry is
+   * clean. The insert is guarded against an existing open match so a retry
+   * after a partial failure can't produce a duplicate pairing.
+   */
+  const acceptInterest = async (listing: ListingWithCreator, interest: ListingInterest) => {
+    if (!viewerProfileId) return;
+    setBusy(true);
+    setError('');
+    const supabase = createClient();
+
+    const alreadyMatched = matches.some(
+      (m) => m.listing_id === listing.id && m.status !== 'closed',
+    );
+    if (!alreadyMatched) {
+      const { error: mErr } = await supabase.from('matches').insert({
+        listing_id: listing.id,
+        initiator_profile_id: listing.creator_profile_id,
+        matched_profile_id: interest.profile_id,
+        status: 'connected',
+        source: 'self',
+      });
+      if (mErr) { setBusy(false); setError(mErr.message); return; }
+    }
+
+    const { error: iErr } = await supabase
+      .from('market_interests')
+      .update({ status: 'accepted' })
+      .eq('id', interest.id);
+    if (iErr) { setBusy(false); setError(iErr.message); return; }
+
+    const { error: lErr } = await supabase
+      .from('market_listings')
+      .update({ status: 'matched' })
+      .eq('id', listing.id);
+    if (lErr) { setBusy(false); setError(lErr.message); return; }
+
+    setBusy(false);
+    refetch();
+  };
+
+  const rejectInterest = async (interest: ListingInterest) => {
+    setBusy(true);
+    setError('');
+    const { error: err } = await createClient()
+      .from('market_interests')
+      .update({ status: 'declined' })
+      .eq('id', interest.id);
+    setBusy(false);
+    if (err) { setError(err.message); return; }
+    refetch();
+  };
 
   if (loading) return <Loading />;
 
@@ -325,6 +495,12 @@ export default function MarketPage() {
         </button>
       </div>
 
+      {error && (
+        <div className="mb-3 flex items-center gap-[7px] font-serif text-xs text-red">
+          <Icon name="x" size={14} color="var(--color-red)" />{error}
+        </div>
+      )}
+
       <Segmented
         items={[
           { id: 'wanted', label: ui('market.wanted') },
@@ -339,7 +515,15 @@ export default function MarketPage() {
         <div>
           {wanted.length === 0 && <EmptyState text={ui('market.no_wanted')} />}
           {wanted.map((l) => (
-            <MarketCard key={l.id} listing={l} viewerProfileId={viewerProfileId} onInterest={() => setInterestFor(l)} />
+            <MarketCard
+              key={l.id}
+              listing={l}
+              viewerProfileId={viewerProfileId}
+              busy={busy}
+              onInterest={() => setInterestFor(l)}
+              onAccept={(i) => acceptInterest(l, i)}
+              onReject={rejectInterest}
+            />
           ))}
         </div>
       )}
@@ -348,15 +532,23 @@ export default function MarketPage() {
         <div>
           {offers.length === 0 && <EmptyState text={ui('market.no_offers')} />}
           {offers.map((l) => (
-            <MarketCard key={l.id} listing={l} viewerProfileId={viewerProfileId} onInterest={() => setInterestFor(l)} />
+            <MarketCard
+              key={l.id}
+              listing={l}
+              viewerProfileId={viewerProfileId}
+              busy={busy}
+              onInterest={() => setInterestFor(l)}
+              onAccept={(i) => acceptInterest(l, i)}
+              onReject={rejectInterest}
+            />
           ))}
         </div>
       )}
 
       {tab === 'matches' && (
         <div>
-          {matches.length === 0 && <EmptyState text={ui('market.no_matches')} />}
-          {matches.map((m) => (
+          {liveMatches.length === 0 && <EmptyState text={ui('market.no_matches')} />}
+          {liveMatches.map((m) => (
             <MatchCard key={m.id} match={m} onDone={refetch} />
           ))}
         </div>

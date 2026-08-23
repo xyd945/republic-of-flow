@@ -87,11 +87,26 @@ export interface ProfileWithHiddenWorlds extends Profile {
   languages: string[];
 }
 
+export type InterestStatus = 'pending' | 'accepted' | 'declined' | 'withdrawn';
+
+export interface ListingInterest {
+  id: string;
+  listing_id: string;
+  profile_id: string;
+  message: Translatable | null;
+  status: InterestStatus;
+  profile?: ProfileWithHiddenWorlds;
+}
+
 export interface ListingWithCreator extends MarketListing {
   creator?: ProfileWithHiddenWorlds;
-  /** Interests the viewer is allowed to see — RLS hides other members' rows. */
-  interests_count: number;
-  viewer_interested: boolean;
+  /**
+   * Only what RLS lets the viewer see: the full set for a listing you own or
+   * if you're a curator, otherwise just your own row. Never render a count
+   * from this to a non-owner — it would be wrong.
+   */
+  interests: ListingInterest[];
+  viewer_interest_status: InterestStatus | null;
   suggested_profile_id: string | null;
   suggested_profile?: ProfileWithHiddenWorlds;
   suggested_reason: Translatable | null;

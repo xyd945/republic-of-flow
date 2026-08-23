@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { createClient } from './client';
 import type {
+  InterestStatus,
+  ListingInterest,
   ListingWithCreator,
   MarketListing,
   MatchWithParties,
@@ -52,7 +54,7 @@ export function DirectoryProvider({ children }: { children: React.ReactNode }) {
         supabase.from('profiles').select('*').order('founder_no'),
         supabase.from('profile_hidden_worlds').select('*').order('sort_order'),
         supabase.from('market_listings').select('*').order('created_at', { ascending: false }),
-        supabase.from('market_interests').select('listing_id,profile_id,status'),
+        supabase.from('market_interests').select('id,listing_id,profile_id,message,status').order('created_at'),
         supabase.from('matches').select('*').order('created_at', { ascending: false }),
       ]);
       if (cancelled) return;
@@ -75,19 +77,22 @@ export function DirectoryProvider({ children }: { children: React.ReactNode }) {
 
       const me = userId ? people.find((p) => p.user_id === userId) ?? null : null;
 
-      const countByListing = new Map<string, number>();
-      const mineByListing = new Set<string>();
+      // RLS returns every interest on listings you own (and everything, to a
+      // curator), but only your own row on anyone else's listing.
+      const interestsByListing = new Map<string, ListingInterest[]>();
+      const mineByListing = new Map<string, InterestStatus>();
       for (const i of interestRes.data ?? []) {
-        if (i.status === 'withdrawn' || i.status === 'declined') continue;
-        countByListing.set(i.listing_id, (countByListing.get(i.listing_id) ?? 0) + 1);
-        if (me && i.profile_id === me.id) mineByListing.add(i.listing_id);
+        const list = interestsByListing.get(i.listing_id) ?? [];
+        list.push({ ...i, profile: byId.get(i.profile_id) });
+        interestsByListing.set(i.listing_id, list);
+        if (me && i.profile_id === me.id) mineByListing.set(i.listing_id, i.status);
       }
 
       const listingRows: ListingWithCreator[] = (listingRes.data ?? []).map((l) => ({
         ...l,
         creator: byId.get(l.creator_profile_id),
-        interests_count: countByListing.get(l.id) ?? 0,
-        viewer_interested: mineByListing.has(l.id),
+        interests: interestsByListing.get(l.id) ?? [],
+        viewer_interest_status: mineByListing.get(l.id) ?? null,
         suggested_profile: l.suggested_profile_id ? byId.get(l.suggested_profile_id) : undefined,
       }));
       const listingById = new Map<string, MarketListing>(listingRows.map((l) => [l.id, l]));
