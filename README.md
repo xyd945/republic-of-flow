@@ -76,6 +76,27 @@ where user_id = (select id from auth.users where email = 'someone@school.edu');
 The person must have signed in at least once, or there is no `auth.users` row to
 match and the update affects zero rows.
 
+## Branches
+
+| Branch | Purpose |
+|---|---|
+| `development` | Day-to-day work and local testing. Branch from here. |
+| `staging` | Pre-production verification. |
+| `main` | **Production.** Every push deploys to Cloudflare automatically. |
+
+Work on a branch off `development`, open a PR into it, then promote
+`development` → `staging` → `main`. Nothing lands on `main` directly: a merge
+there is a deploy to real members, with no gap in between.
+
+Cloudflare also builds non-production branches, so `staging` and `development`
+get preview deployments. Those need the same `NEXT_PUBLIC_*` build variables as
+production, or the preview serves the fail-closed 503.
+
+> **These branches share one Supabase project.** A preview deployment reads and
+> writes the same live data as production unless you point it at a separate
+> Supabase project via its own build variables. Until then, treat "testing on
+> staging" as testing against real member records.
+
 ## Deploying
 
 Pushes to `main` build and deploy automatically through Cloudflare Workers
