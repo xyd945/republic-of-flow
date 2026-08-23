@@ -452,7 +452,15 @@ export default function MarketPage() {
   const wanted = listings.filter((l) => l.type === 'wanted');
   const offers = listings.filter((l) => l.type === 'offer');
   // Closed matches are history — the curator desk shows them, members don't.
-  const liveMatches = matches.filter((m) => m.status !== 'closed');
+  // Scoped to the viewer on purpose. RLS lets a curator read every match, so
+  // without this the member-facing tab silently becomes a cohort-wide list —
+  // with a live "We met!" on pairings the curator isn't part of. Cross-cohort
+  // matches belong in the Curator Desk, which has its own Matches tab.
+  const liveMatches = matches.filter(
+    (m) =>
+      m.status !== 'closed' &&
+      (m.initiator_profile_id === viewerProfileId || m.matched_profile_id === viewerProfileId),
+  );
 
   // Requests are otherwise only visible inline on your own card, buried among
   // everyone else's listings — this is the one place you can reliably find them.
