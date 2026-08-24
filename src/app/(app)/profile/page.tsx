@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, Icon, Chip, Button, Badge } from '@/components/ui';
 import { CATEGORY_COLORS } from '@/lib/seed';
-import { CATEGORIES, LANGUAGES } from '@/lib/i18n/translations';
+import { CATEGORIES, LANGUAGES, t } from '@/lib/i18n/translations';
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
 import { useI18n } from '@/lib/i18n/context';
 import { useProfile, useSignOut } from '@/lib/supabase/hooks';
@@ -32,17 +32,97 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /**
  * Editing counterpart to i18n `t()`, and deliberately stricter: it must NOT
  * fall through to another language. An empty field means "no translation yet
- * in this language" — borrowing the Chinese text here would save it straight
- * into the English field on the next save.
+ * in this language" — borrowing the English text here would save it straight
+ * back into the Chinese field, because the form has no way to tell a real
+ * translation apart from a fallback it displayed a moment ago.
+ *
+ * That is exactly what used to happen: this returned `obj[lang] ?? obj.en`,
+ * so any save made while the UI was in Chinese stamped the English text into
+ * the `zh` key of every field the member had not touched.
  */
 function tVal(obj: Translatable | string | null | undefined, lang: Language): string {
   if (!obj) return '';
   if (typeof obj === 'string') return obj;
-  return obj[lang] ?? obj.en ?? '';
+  return obj[lang] ?? '';
 }
 
+/**
+ * What the field says in the OTHER language, shown as placeholder text.
+ * Since tVal no longer falls through, a Chinese-mode field holding only
+ * English renders empty — without this hint that reads as a lost profile
+ * rather than as an untranslated field.
+ */
+function otherLang(obj: Translatable | string | null | undefined, lang: Language): string {
+  if (!obj || typeof obj === 'string') return '';
+  return obj[lang === 'en' ? 'zh' : 'en'] ?? '';
+}
+
+/**
+ * Write `value` into `lang`, leaving every other language untouched. An
+ * emptied field drops just that language's key rather than storing '', so
+ * clearing the Chinese headline leaves the English one intact.
+ */
 function mergeLang(existing: Translatable | null | undefined, lang: Language, value: string): Translatable {
-  return { ...(existing && typeof existing === 'object' ? existing : {}), [lang]: value };
+  const next: Translatable = existing && typeof existing === 'object' ? { ...existing } : {};
+  const trimmed = value.trim();
+  if (trimmed) next[lang] = trimmed;
+  else delete next[lang];
+  return next;
+}
+
+/**
+ * Topics and hidden worlds are displayed read-only — a chip with a remove
+ * button, never an editable field — so they carry their original Translatable
+ * and hand it back on save byte-for-byte. Only something the member actually
+ * typed gets a language stamped on it. This is what stops a save in one
+ * language from deleting the other, which the old
+ * `topics.map(t => mergeLang(null, lang, t))` did on every single save.
+ */
+type Draft = { original: Translatable | null; text: string; lang?: Language };
+
+/**
+ * `lang` is the language the member was in when they TYPED this, captured at
+ * creation. Reading the active language at save time instead would file
+ * "Woodworking" under `zh` just because they switched tabs before saving.
+ */
+function draftValue({ original, text, lang }: Draft, fallback: Language): Translatable {
+  return original ?? mergeLang(null, lang ?? fallback, text);
+}
+
+/** The four free-text fields that carry a translation. */
+type TransFields = { headline: string; role: string; intro: string; professional: string };
+
+const EMPTY_FIELDS: TransFields = { headline: '', role: '', intro: '', professional: '' };
+
+function fieldsFor(profile: { headline: unknown; role: unknown; intro: unknown; professional: unknown }, lang: Language): TransFields {
+  return {
+    headline: tVal(profile.headline as Translatable, lang),
+    role: tVal(profile.role as Translatable, lang),
+    intro: tVal(profile.intro as Translatable, lang),
+    professional: tVal(profile.professional as Translatable, lang),
+  };
+}
+
+/**
+ * Fold every language the member has drafted into the stored value, so one
+ * save writes both translations. A language never opened has no draft and is
+ * therefore left exactly as it was.
+ */
+function mergeDrafts(
+  stored: Translatable | null | undefined,
+  drafts: Record<string, TransFields>,
+  seeds: Record<string, TransFields>,
+  key: keyof TransFields,
+): Translatable {
+  let out: Translatable = stored && typeof stored === 'object' ? { ...stored } : {};
+  for (const [lang, fields] of Object.entries(drafts)) {
+    // Untouched since it was seeded, so leave the stored value exactly as it
+    // is. Merging it back would rewrite the row for no reason — and since
+    // mergeLang trims, simply LOOKING at a language would quietly reformat it.
+    if (seeds[lang]?.[key] === fields[key]) continue;
+    out = mergeLang(out, lang as Language, fields[key]);
+  }
+  return out;
 }
 
 // Guard against extra/trailing spaces producing "undefined" initials.
@@ -63,15 +143,23 @@ export default function ProfilePage() {
   const [name, setName] = useState('');
   const [nativeName, setNativeName] = useState('');
   const [className, setClassName] = useState<string>(DEFAULT_CLASS);
-  const [headline, setHeadline] = useState('');
-  const [role, setRole] = useState('');
-  const [intro, setIntro] = useState('');
-  const [professional, setProfessional] = useState('');
+  /**
+   * One draft per language, not one set of fields for whichever language is
+   * showing. The form used to re-read every field from the profile whenever
+   * `lang` changed, so switching to Chinese to add a translation threw away
+   * the English edit you had just made — the exact workflow this change is
+   * meant to enable. Drafts persist across switches and all of them are
+   * written by a single save.
+   */
+  const [drafts, setDrafts] = useState<Record<string, TransFields>>({});
+  // What each language looked like when its draft was seeded, so we can tell
+  // an edit apart from a language the member merely opened and read.
+  const [seeds, setSeeds] = useState<Record<string, TransFields>>({});
   const [contactKind, setContactKind] = useState<'whatsapp' | 'wechat' | 'email' | 'class'>('class');
   const [contactValue, setContactValue] = useState('');
-  const [worlds, setWorlds] = useState<{ id: string; name: string; category: CategoryId; visible: boolean; isNew?: boolean }[]>([]);
-  const [askTopics, setAskTopics] = useState<string[]>([]);
-  const [wantTopics, setWantTopics] = useState<string[]>([]);
+  const [worlds, setWorlds] = useState<{ id: string; original: Translatable | null; name: string; lang?: Language; category: CategoryId; visible: boolean }[]>([]);
+  const [askTopics, setAskTopics] = useState<Draft[]>([]);
+  const [wantTopics, setWantTopics] = useState<Draft[]>([]);
   const [newAsk, setNewAsk] = useState('');
   const [newWant, setNewWant] = useState('');
   const [showAddWorld, setShowAddWorld] = useState(false);
@@ -79,101 +167,144 @@ export default function ProfilePage() {
   const [newWorldCat, setNewWorldCat] = useState<CategoryId>('craft');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [deletedWorldIds, setDeletedWorldIds] = useState<string[]>([]);
+  const [error, setError] = useState('');
+  // Which server revision the form was last filled from. Comparing against
+  // profile.updated_at tells a genuine reload apart from a language switch.
+  const [hydratedAt, setHydratedAt] = useState<string | null>(null);
+  const [pendingSave, setPendingSave] = useState(false);
+
+  useEffect(() => {
+    if (!saved) return;
+    const id = setTimeout(() => setSaved(false), 2000);
+    return () => clearTimeout(id);
+  }, [saved]);
+
+  // The directory swallows query errors, so a failed reload would otherwise
+  // leave the button saying "Saving..." for good. Release it either way.
+  useEffect(() => {
+    if (!pendingSave) return;
+    const id = setTimeout(() => { setPendingSave(false); setSaving(false); }, 8000);
+    return () => clearTimeout(id);
+  }, [pendingSave]);
+
+  const fields = drafts[lang] ?? EMPTY_FIELDS;
+  const setField = (key: keyof TransFields, value: string) =>
+    setDrafts((d) => ({ ...d, [lang]: { ...(d[lang] ?? EMPTY_FIELDS), [key]: value } }));
 
   useEffect(() => {
     if (!profile) return;
-    setName(profile.full_name);
-    setNativeName(profile.native_name ?? '');
-    setClassName(profile.class_name || DEFAULT_CLASS);
-    setHeadline(tVal(profile.headline, lang));
-    setRole(tVal(profile.role, lang));
-    setIntro(tVal(profile.intro, lang));
-    setProfessional(tVal(profile.professional, lang));
-    setContactKind(profile.contact_kind);
-    setContactValue(profile.contact_value);
-    setWorlds(profile.hidden_worlds.map((hw) => ({
-      id: hw.id,
-      name: tVal(hw.name, lang),
-      category: hw.category as CategoryId,
-      visible: hw.visibility === 'members',
-    })));
-    setAskTopics((profile.ask_topics ?? []).map((a) => tVal(a, lang)));
-    setWantTopics((profile.want_topics ?? []).map((w) => tVal(w, lang)));
-    setDeletedWorldIds([]);
-  }, [profile, lang]);
+    const relabel = (d: Draft) => (d.original ? { ...d, text: t(d.original, lang) } : d);
+
+    // Fresh data from the server — after first load or after a save. Take it
+    // wholesale; anything in the form has just been written or was never
+    // entered.
+    if (profile.updated_at !== hydratedAt) {
+      setHydratedAt(profile.updated_at);
+      setName(profile.full_name);
+      setNativeName(profile.native_name ?? '');
+      setClassName(profile.class_name || DEFAULT_CLASS);
+      setContactKind(profile.contact_kind);
+      setContactValue(profile.contact_value);
+      const seeded = fieldsFor(profile, lang);
+      setDrafts({ [lang]: seeded });
+      setSeeds({ [lang]: seeded });
+      // Read-only rows: they display with the usual cross-language fallback
+      // and keep `original` to hand straight back on save.
+      setWorlds(profile.hidden_worlds.map((hw) => ({
+        id: hw.id,
+        original: hw.name as Translatable,
+        name: t(hw.name, lang),
+        category: hw.category as CategoryId,
+        visible: hw.visibility === 'members',
+      })));
+      setAskTopics((profile.ask_topics ?? []).map((a) => ({ original: a as Translatable, text: t(a, lang) })));
+      setWantTopics((profile.want_topics ?? []).map((w) => ({ original: w as Translatable, text: t(w, lang) })));
+      setError('');
+      if (pendingSave) {
+        setPendingSave(false);
+        setSaving(false);
+        setSaved(true);
+      }
+      return;
+    }
+
+    // Same data, the member just switched language. Seed a draft for it if
+    // this is the first visit, relabel the read-only rows, and leave every
+    // pending edit — in this language and the other — untouched.
+    if (!drafts[lang]) {
+      const seeded = fieldsFor(profile, lang);
+      setDrafts((d) => ({ ...d, [lang]: seeded }));
+      setSeeds((sd) => ({ ...sd, [lang]: seeded }));
+    }
+    setWorlds((prev) => prev.map((w) => (w.original ? { ...w, name: t(w.original, lang) } : w)));
+    setAskTopics((prev) => prev.map(relabel));
+    setWantTopics((prev) => prev.map(relabel));
+  }, [profile, lang, hydratedAt, pendingSave, drafts]);
 
   const addWorld = () => {
     if (!newWorldName.trim()) return;
-    setWorlds([...worlds, { id: `new-${Date.now()}`, name: newWorldName.trim(), category: newWorldCat, visible: true, isNew: true }]);
+    // `original: null` marks it as new — save_profile inserts the rows that
+    // arrive without an id and keeps the rest.
+    setWorlds([...worlds, { id: `new-${Date.now()}`, original: null, name: newWorldName.trim(), lang, category: newWorldCat, visible: true }]);
     setNewWorldName('');
     setShowAddWorld(false);
   };
 
-  const removeWorld = (id: string) => {
-    const w = worlds.find(x => x.id === id);
-    if (w && !w.isNew) {
-      setDeletedWorldIds(prev => [...prev, id]);
-    }
-    setWorlds(worlds.filter(x => x.id !== id));
-  };
+  // No delete list to track any more: the array we send IS the desired set,
+  // so anything removed here is simply absent when we save.
+  const removeWorld = (id: string) => setWorlds(worlds.filter(x => x.id !== id));
 
+  /**
+   * One call, one transaction. This used to be three sequential writes with
+   * the errors of the last two discarded, so a half-finished save still
+   * reported "Saved!" — see 00007 for the full account.
+   */
   const handleSave = async () => {
     if (!profile) return;
     setSaving(true);
-    const supabase = createClient();
+    setError('');
 
-    const { error: profileErr } = await supabase
-      .from('profiles')
-      .update({
-        full_name: name,
-        native_name: nativeName || null,
-        class_name: className,
-        initials: initialsOf(name),
-        headline: mergeLang(profile.headline as Translatable, lang, headline),
-        role: mergeLang(profile.role as Translatable, lang, role),
-        intro: mergeLang(profile.intro as Translatable, lang, intro),
-        professional: mergeLang(profile.professional as Translatable, lang, professional),
-        contact_kind: contactKind,
-        contact_value: contactValue,
-        ask_topics: askTopics.map((t) => mergeLang(null, lang, t)),
-        want_topics: wantTopics.map((t) => mergeLang(null, lang, t)),
-      })
-      .eq('id', profile.id);
+    const { error: err } = await createClient().rpc('save_profile', {
+      p_full_name: name,
+      p_native_name: nativeName || null,
+      p_class_name: className,
+      p_initials: initialsOf(name),
+      p_headline: mergeDrafts(profile.headline as Translatable, drafts, seeds, 'headline'),
+      p_role: mergeDrafts(profile.role as Translatable, drafts, seeds, 'role'),
+      p_intro: mergeDrafts(profile.intro as Translatable, drafts, seeds, 'intro'),
+      p_professional: mergeDrafts(profile.professional as Translatable, drafts, seeds, 'professional'),
+      p_contact_kind: contactKind,
+      p_contact_value: contactValue,
+      p_ask_topics: askTopics.map((d) => draftValue(d, lang)),
+      p_want_topics: wantTopics.map((d) => draftValue(d, lang)),
+      p_hidden_worlds: worlds.map((w, i) => ({
+        // A new world has no row yet, so it goes without an id and is inserted.
+        id: w.original ? w.id : null,
+        name: w.original ?? mergeLang(null, w.lang ?? lang, w.name),
+        category: w.category,
+        visibility: w.visible ? 'members' : 'private',
+        sort_order: i,
+      })),
+      // The ids we loaded. save_profile deletes only rows in this set that are
+      // absent from the one above, so a world added in another tab since we
+      // read is left alone rather than destroyed by our stale list.
+      p_known_world_ids: profile.hidden_worlds.map((h) => h.id),
+      // Refuse the save outright if the profile moved under us — better a
+      // clear message than one language quietly overwriting the other.
+      p_expected_updated_at: profile.updated_at,
+    });
 
-    if (profileErr) {
-      console.error('Save profile error:', profileErr);
-      setSaving(false);
-      return;
-    }
+    if (err) { setSaving(false); setError(err.message); return; }
 
-    if (deletedWorldIds.length > 0) {
-      await supabase
-        .from('profile_hidden_worlds')
-        .delete()
-        .in('id', deletedWorldIds);
-    }
-
-    const newWorlds = worlds.filter(w => w.isNew);
-    if (newWorlds.length > 0) {
-      await supabase
-        .from('profile_hidden_worlds')
-        .insert(newWorlds.map((w, i) => ({
-          profile_id: profile.id,
-          name: { [lang]: w.name },
-          category: w.category,
-          visibility: w.visible ? 'members' : 'private',
-          sort_order: (profile.hidden_worlds.length ?? 0) + i,
-        })));
-    }
-
-    // Reload so newly inserted worlds get their real ids — otherwise a second
-    // Save would re-insert them as duplicates.
+    // Reload so newly inserted worlds pick up their real ids — otherwise a
+    // second Save would send them as new again.
+    //
+    // Deliberately stay in the saving state until that reload lands. Clearing
+    // it here would leave the form looking ready while a rehydration is still
+    // in flight, and anything typed in that window would be overwritten by it.
+    // "Saved!" now means the server has it AND we have read it back.
+    setPendingSave(true);
     refetch();
-
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   };
 
   if (loading) {
@@ -232,19 +363,19 @@ export default function ProfilePage() {
         </select>
       </Field>
       <Field label={ui('profile.headline')}>
-        <input type="text" value={headline} onChange={(e) => setHeadline(e.target.value)} className="parch-input" />
+        <input type="text" value={fields.headline} onChange={(e) => setField('headline', e.target.value)} placeholder={otherLang(profile.headline, lang)} className="parch-input" />
       </Field>
       <Field label={ui('profile.role')}>
-        <input type="text" value={role} onChange={(e) => setRole(e.target.value)} className="parch-input" />
+        <input type="text" value={fields.role} onChange={(e) => setField('role', e.target.value)} placeholder={otherLang(profile.role, lang)} className="parch-input" />
       </Field>
 
       {/* Introduction */}
       <SectionLabel>{ui('profile.introduction')}</SectionLabel>
       <Field label={ui('profile.personal_intro')}>
-        <textarea value={intro} onChange={(e) => setIntro(e.target.value)} rows={3} className="parch-input" />
+        <textarea value={fields.intro} onChange={(e) => setField('intro', e.target.value)} rows={3} placeholder={otherLang(profile.intro, lang)} className="parch-input" />
       </Field>
       <Field label={ui('profile.professional')}>
-        <textarea value={professional} onChange={(e) => setProfessional(e.target.value)} rows={2} className="parch-input" />
+        <textarea value={fields.professional} onChange={(e) => setField('professional', e.target.value)} rows={2} placeholder={otherLang(profile.professional, lang)} className="parch-input" />
       </Field>
 
       {/* Hidden Worlds */}
@@ -309,7 +440,7 @@ export default function ProfilePage() {
         <div className="flex flex-wrap gap-[6px] mb-2">
           {askTopics.map((topic, i) => (
             <span key={i} className="inline-flex items-center gap-1">
-              <Chip variant="wash" tone="neutral">{topic}</Chip>
+              <Chip variant="wash" tone="neutral">{topic.text}</Chip>
               <button
                 type="button"
                 onClick={() => setAskTopics(askTopics.filter((_, j) => j !== i))}
@@ -325,13 +456,13 @@ export default function ProfilePage() {
             type="text"
             value={newAsk}
             onChange={(e) => setNewAsk(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && newAsk.trim()) { setAskTopics([...askTopics, newAsk.trim()]); setNewAsk(''); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && newAsk.trim()) { setAskTopics([...askTopics, { original: null, text: newAsk.trim(), lang }]); setNewAsk(''); } }}
             placeholder={ui('profile.add_topic')}
             className="parch-input flex-1"
           />
           <button
             type="button"
-            onClick={() => { if (newAsk.trim()) { setAskTopics([...askTopics, newAsk.trim()]); setNewAsk(''); } }}
+            onClick={() => { if (newAsk.trim()) { setAskTopics([...askTopics, { original: null, text: newAsk.trim(), lang }]); setNewAsk(''); } }}
             className="w-9 h-9 grid place-items-center rounded-xs bg-transparent border border-line cursor-pointer shrink-0"
           >
             <Icon name="plus" size={14} color="var(--color-bronze)" />
@@ -345,7 +476,7 @@ export default function ProfilePage() {
         <div className="flex flex-wrap gap-[6px] mb-2">
           {wantTopics.map((topic, i) => (
             <span key={i} className="inline-flex items-center gap-1">
-              <Chip variant="wash" tone="green">{topic}</Chip>
+              <Chip variant="wash" tone="green">{topic.text}</Chip>
               <button
                 type="button"
                 onClick={() => setWantTopics(wantTopics.filter((_, j) => j !== i))}
@@ -361,13 +492,13 @@ export default function ProfilePage() {
             type="text"
             value={newWant}
             onChange={(e) => setNewWant(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && newWant.trim()) { setWantTopics([...wantTopics, newWant.trim()]); setNewWant(''); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && newWant.trim()) { setWantTopics([...wantTopics, { original: null, text: newWant.trim(), lang }]); setNewWant(''); } }}
             placeholder={ui('profile.add_topic')}
             className="parch-input flex-1"
           />
           <button
             type="button"
-            onClick={() => { if (newWant.trim()) { setWantTopics([...wantTopics, newWant.trim()]); setNewWant(''); } }}
+            onClick={() => { if (newWant.trim()) { setWantTopics([...wantTopics, { original: null, text: newWant.trim(), lang }]); setNewWant(''); } }}
             className="w-9 h-9 grid place-items-center rounded-xs bg-transparent border border-line cursor-pointer shrink-0"
           >
             <Icon name="plus" size={14} color="var(--color-bronze)" />
@@ -419,6 +550,11 @@ export default function ProfilePage() {
 
       {/* Sticky save */}
       <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-[18px] pb-3 pt-2 bg-white/90 backdrop-blur-md border-t border-line z-40">
+        {error && (
+          <div className="mb-2 flex items-center gap-[7px] font-serif text-xs text-red">
+            <Icon name="x" size={14} color="var(--color-red)" />{error}
+          </div>
+        )}
         <Button tone="ink" onClick={handleSave} loading={saving} icon={<Icon name="check" size={15} color="#fff" />}>
           {saving ? ui('profile.saving') : saved ? ui('profile.saved') : ui('profile.save')}
         </Button>
