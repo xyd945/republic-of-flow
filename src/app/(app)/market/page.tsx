@@ -245,13 +245,20 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
   const [busy, setBusy] = useState(false);
   const done = match.status === 'completed';
 
+  const [error, setError] = useState('');
+
+  /**
+   * Direct writes to matches are revoked: the row describes a relationship
+   * between two people, so it is only ever changed by a function that checks
+   * who is asking. Participants may mark it met; closing it stays curator-only,
+   * because that also has to reopen the listing and restore the request.
+   */
   const markMet = async () => {
     setBusy(true);
-    await createClient()
-      .from('matches')
-      .update({ status: 'completed', completed_at: new Date().toISOString() })
-      .eq('id', match.id);
+    setError('');
+    const { error: err } = await createClient().rpc('mark_match_met', { p_match_id: match.id });
     setBusy(false);
+    if (err) { setError(err.message); return; }
     onDone();
   };
 
@@ -275,6 +282,11 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
           <div className="font-serif text-xs text-green leading-[1.5]">
             <strong>{ui('market.next_step')}</strong> {t(match.next_step)}
           </div>
+        </div>
+      )}
+      {error && (
+        <div className="mb-2 flex items-center gap-[7px] font-serif text-xs text-red">
+          <Icon name="x" size={14} color="var(--color-red)" />{error}
         </div>
       )}
       <Button tone="green" size="sm" onClick={markMet} loading={busy} disabled={done} icon={<Icon name="check" size={13} color="#fff" />}>
