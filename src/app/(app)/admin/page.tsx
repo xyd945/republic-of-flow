@@ -142,13 +142,13 @@ export default function AdminPage() {
       return;
     }
     setBusyKey('suggest');
-    const { error } = await createClient()
-      .from('market_listings')
-      .update({
-        suggested_profile_id: suggestPerson,
-        suggested_reason: suggestReason.trim() ? { [lang]: suggestReason.trim() } : null,
-      })
-      .eq('id', suggestListing);
+    // suggested_* is no longer directly writable — a member could otherwise
+    // forge a curator endorsement on their own listing.
+    const { error } = await createClient().rpc('curator_suggest', {
+      p_listing_id: suggestListing,
+      p_profile_id: suggestPerson,
+      p_reason: suggestReason.trim() ? { [lang]: suggestReason.trim() } : null,
+    });
     setBusyKey(null);
     if (error) { setSuggestState({ tone: 'err', msg: error.message }); return; }
     setSuggestState({ tone: 'ok', msg: ui('admin.suggestion_sent') });
