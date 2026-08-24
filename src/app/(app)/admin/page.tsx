@@ -96,18 +96,30 @@ export default function AdminPage() {
   const wantedCount = listings.filter((l) => l.type === 'wanted').length;
   const offerCount = listings.filter((l) => l.type === 'offer').length;
 
-  const patchProfile = async (id: string, patch: Record<string, unknown>, key: string) => {
+  /**
+   * is_featured, is_active and class_name are no longer directly writable by
+   * anyone — a member could otherwise write any column on their own row,
+   * including is_curator. The desk goes through a function that checks curator
+   * status itself. Note there is deliberately no way to grant curator here:
+   * that stays a SQL-only act.
+   */
+  const patchProfile = async (
+    id: string,
+    patch: { is_featured?: boolean; is_active?: boolean; class_name?: string },
+    key: string,
+  ) => {
     setBusyKey(key);
-    await createClient().from('profiles').update(patch).eq('id', id);
+    const { error } = await createClient().rpc('curator_update_member', {
+      p_profile_id: id,
+      p_is_featured: patch.is_featured ?? null,
+      p_is_active: patch.is_active ?? null,
+      p_class_name: patch.class_name ?? null,
+    });
     setBusyKey(null);
+    if (error) { setMatchState({ tone: 'err', msg: error.message }); return; }
     refetch();
   };
 
-  /**
-   * Undo a pairing: close the match, reopen the listing, and put the accepted
-   * request back to pending so the owner can choose again. Rejected requests
-   * are deliberately left alone — the owner already made that call.
-   */
   /**
    * One call — the dismatch() function closes the match, reopens the listing
    * and returns the accepted request to pending inside a single transaction.
