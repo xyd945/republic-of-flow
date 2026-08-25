@@ -38,3 +38,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated from the live schema by `npm run gen:types` — checked in on purpose,
+# so a schema change shows up as a diff in review.
