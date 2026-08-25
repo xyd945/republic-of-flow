@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Chip, Button, Badge } from '@/components/ui';
+import { Avatar, Icon, Chip, Button, Badge, LoadError } from '@/components/ui';
 import { CATEGORY_COLORS } from '@/lib/seed';
 import { CATEGORIES, LANGUAGES, t } from '@/lib/i18n/translations';
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
 import { useI18n } from '@/lib/i18n/context';
-import { useProfile, useSignOut } from '@/lib/supabase/hooks';
+import { useSignOut } from '@/lib/supabase/hooks';
+import { useViewerProfile } from '@/lib/data/views';
+import { useSaveProfile } from '@/lib/data/mutations';
 import { createClient } from '@/lib/supabase/client';
 import { CLASSES, DEFAULT_CLASS } from '@/lib/classes';
 import type { Language, CategoryId, Translatable } from '@/types';
@@ -137,8 +139,9 @@ function initialsOf(fullName: string): string {
 export default function ProfilePage() {
   const router = useRouter();
   const { lang, setLang, ui } = useI18n();
-  const { profile, loading, refetch } = useProfile();
+  const { profile, loading, error: loadError, refreshing } = useViewerProfile();
   const signOut = useSignOut();
+  const save = useSaveProfile();
 
   const [name, setName] = useState('');
   const [nativeName, setNativeName] = useState('');
@@ -180,12 +183,20 @@ export default function ProfilePage() {
   }, [saved]);
 
   // The directory swallows query errors, so a failed reload would otherwise
-  // leave the button saying "Saving..." for good. Release it either way.
+  // leave the button saying "Saving..." for good. Release it either way — and
+  // say something, rather than just going quiet. Silently returning to "Save
+  // changes" with neither "Saved!" nor an error leaves the member with no idea
+  // whether their edit reached the Republic. The write itself succeeded; it is
+  // the reload afterwards that did not, so the wording says exactly that.
   useEffect(() => {
     if (!pendingSave) return;
-    const id = setTimeout(() => { setPendingSave(false); setSaving(false); }, 8000);
+    const id = setTimeout(() => {
+      setPendingSave(false);
+      setSaving(false);
+      setError(ui('profile.saved_not_reloaded'));
+    }, 8000);
     return () => clearTimeout(id);
-  }, [pendingSave]);
+  }, [pendingSave, ui]);
 
   const fields = drafts[lang] ?? EMPTY_FIELDS;
   const setField = (key: keyof TransFields, value: string) =>
@@ -195,10 +206,27 @@ export default function ProfilePage() {
     if (!profile) return;
     const relabel = (d: Draft) => (d.original ? { ...d, text: t(d.original, lang) } : d);
 
-    // Fresh data from the server — after first load or after a save. Take it
-    // wholesale; anything in the form has just been written or was never
-    // entered.
-    if (profile.updated_at !== hydratedAt) {
+    /**
+     * Take the server's copy wholesale ONLY when the form has nothing of the
+     * member's in it — the very first load, or the moment their own save
+     * lands. Both were previously conflated with "updated_at changed", which
+     * was wrong twice over:
+     *
+     *  - profiles and hidden_worlds are separate queries, invalidated
+     *    separately. If profiles came back first, this concluded the save was
+     *    finished and rebuilt the form against the OLD worlds — resurrecting a
+     *    Hidden World the member had just deleted, and saying "Saved!". So a
+     *    completing save now waits for every table to settle.
+     *
+     *  - updated_at also changes for reasons that are not the member's save.
+     *    A curator toggling is_featured fires the same trigger. With
+     *    refetchOnWindowFocus on, coming back to the tab would then wipe an
+     *    unsaved draft with no warning.
+     */
+    const firstLoad = hydratedAt === null;
+    const ourSaveLanded = pendingSave && !refreshing;
+
+    if (profile.updated_at !== hydratedAt && (firstLoad || ourSaveLanded)) {
       setHydratedAt(profile.updated_at);
       setName(profile.full_name);
       setNativeName(profile.native_name ?? '');
@@ -228,9 +256,10 @@ export default function ProfilePage() {
       return;
     }
 
-    // Same data, the member just switched language. Seed a draft for it if
-    // this is the first visit, relabel the read-only rows, and leave every
-    // pending edit — in this language and the other — untouched.
+    // Otherwise the member is mid-edit, or only the language changed. Seed a
+    // draft for a language visited for the first time, relabel the read-only
+    // rows, and leave every pending edit — in this language and the other —
+    // exactly where it is.
     if (!drafts[lang]) {
       const seeded = fieldsFor(profile, lang);
       setDrafts((d) => ({ ...d, [lang]: seeded }));
@@ -239,7 +268,7 @@ export default function ProfilePage() {
     setWorlds((prev) => prev.map((w) => (w.original ? { ...w, name: t(w.original, lang) } : w)));
     setAskTopics((prev) => prev.map(relabel));
     setWantTopics((prev) => prev.map(relabel));
-  }, [profile, lang, hydratedAt, pendingSave, drafts]);
+  }, [profile, lang, hydratedAt, pendingSave, refreshing, drafts]);
 
   const addWorld = () => {
     if (!newWorldName.trim()) return;
@@ -264,7 +293,7 @@ export default function ProfilePage() {
     setSaving(true);
     setError('');
 
-    const { error: err } = await createClient().rpc('save_profile', {
+    const payload = {
       p_full_name: name,
       p_native_name: nativeName || null,
       p_class_name: className,
@@ -292,9 +321,15 @@ export default function ProfilePage() {
       // Refuse the save outright if the profile moved under us — better a
       // clear message than one language quietly overwriting the other.
       p_expected_updated_at: profile.updated_at,
-    });
+    };
 
-    if (err) { setSaving(false); setError(err.message); return; }
+    try {
+      await save.mutateAsync(payload);
+    } catch (e) {
+      setSaving(false);
+      setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
 
     // Reload so newly inserted worlds pick up their real ids — otherwise a
     // second Save would send them as new again.
@@ -303,9 +338,13 @@ export default function ProfilePage() {
     // it here would leave the form looking ready while a rehydration is still
     // in flight, and anything typed in that window would be overwritten by it.
     // "Saved!" now means the server has it AND we have read it back.
+    // The mutation has already invalidated profiles and hidden worlds, so the
+    // reload is in flight. Staying in the saving state until it lands is what
+    // makes "Saved!" mean the server has it AND we have read it back.
     setPendingSave(true);
-    refetch();
   };
+
+  if (loadError) return <LoadError message={loadError} onRetry={() => window.location.reload()} />;
 
   if (loading) {
     return (
