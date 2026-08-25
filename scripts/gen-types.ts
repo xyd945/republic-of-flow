@@ -17,11 +17,18 @@
 import { writeFileSync } from 'node:fs';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.SUPABASE_SECRET_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+/**
+ * The secret key specifically, not the publishable one. PostgREST filters the
+ * OpenAPI document by the caller's privileges, and 00005 revoked everything
+ * from `anon` — so the publishable key yields a document with no tables in it
+ * at all. Falling back to it would not fail; it would quietly regenerate an
+ * EMPTY schema file.
+ */
+const key = process.env.SUPABASE_SECRET_KEY;
 
 if (!url || !key) {
-  console.error('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY (or the publishable key).');
-  console.error('They are in .env.local — run with:  npx dotenv -e .env.local -- npm run gen:types');
+  console.error('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY.');
+  console.error('Both are in .env.local, which `npm run gen:types` loads for you.');
   process.exit(1);
 }
 
@@ -62,6 +69,20 @@ const rpcs = Object.keys(spec.paths ?? {})
   .filter((p) => p.startsWith('/rpc/'))
   .map((p) => p.slice(5))
   .sort();
+
+/**
+ * Refuse to write nonsense over a good file.
+ *
+ * An empty document is not a schema with no tables — it is a document we were
+ * not allowed to read. Writing it out would produce `export type TableName = ;`
+ * and break the build, or worse, land in a commit as an apparently deliberate
+ * deletion of every type.
+ */
+if (tables.length === 0 || rpcs.length === 0) {
+  console.error(`Refusing to write: the schema document has ${tables.length} tables and ${rpcs.length} functions.`);
+  console.error('That means the key could not read the schema, not that the schema is empty.');
+  process.exit(1);
+}
 
 const lines: string[] = [
   '// GENERATED FILE — do not edit by hand.',
