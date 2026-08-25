@@ -38,16 +38,6 @@ import type {
  */
 
 /**
- * First error among the queries a view depends on, or ''.
- *
- * Deliberately only reports a query that has NOTHING to show. react-query keeps
- * the last good data when a refetch fails, and blowing a working screen away
- * because a background refresh timed out would be its own kind of lying — the
- * data on screen is real, just a minute old. Only a query that has never
- * succeeded leaves the screen with nothing to render, and that is the case this
- * refactor exists to stop rendering as "the Republic is empty".
- */
-/**
  * A backstop for "loading forever".
  *
  * Twice while building this I watched a query sit unsettled indefinitely: once
@@ -78,6 +68,16 @@ function useStuck(loading: boolean): boolean {
   return stuck;
 }
 
+/**
+ * First error among the queries a view depends on, or ''.
+ *
+ * Deliberately only reports a query that has NOTHING to show. react-query keeps
+ * the last good data when a refetch fails, and blowing a working screen away
+ * because a background refresh timed out would be its own kind of lying — the
+ * data on screen is real, just a minute old. Only a query that has never
+ * succeeded leaves the screen with nothing to render, and that is the case this
+ * refactor exists to stop rendering as "the Republic is empty".
+ */
 function firstError(...qs: { error: unknown; data: unknown }[]): string {
   for (const q of qs) {
     if (q.error && q.data === undefined) {
