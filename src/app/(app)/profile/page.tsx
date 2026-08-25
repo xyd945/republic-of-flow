@@ -139,7 +139,7 @@ function initialsOf(fullName: string): string {
 export default function ProfilePage() {
   const router = useRouter();
   const { lang, setLang, ui } = useI18n();
-  const { profile, loading, error: loadError } = useViewerProfile();
+  const { profile, loading, error: loadError, refreshing } = useViewerProfile();
   const signOut = useSignOut();
   const save = useSaveProfile();
 
@@ -183,12 +183,20 @@ export default function ProfilePage() {
   }, [saved]);
 
   // The directory swallows query errors, so a failed reload would otherwise
-  // leave the button saying "Saving..." for good. Release it either way.
+  // leave the button saying "Saving..." for good. Release it either way — and
+  // say something, rather than just going quiet. Silently returning to "Save
+  // changes" with neither "Saved!" nor an error leaves the member with no idea
+  // whether their edit reached the Republic. The write itself succeeded; it is
+  // the reload afterwards that did not, so the wording says exactly that.
   useEffect(() => {
     if (!pendingSave) return;
-    const id = setTimeout(() => { setPendingSave(false); setSaving(false); }, 8000);
+    const id = setTimeout(() => {
+      setPendingSave(false);
+      setSaving(false);
+      setError(ui('profile.saved_not_reloaded'));
+    }, 8000);
     return () => clearTimeout(id);
-  }, [pendingSave]);
+  }, [pendingSave, ui]);
 
   const fields = drafts[lang] ?? EMPTY_FIELDS;
   const setField = (key: keyof TransFields, value: string) =>
@@ -198,10 +206,27 @@ export default function ProfilePage() {
     if (!profile) return;
     const relabel = (d: Draft) => (d.original ? { ...d, text: t(d.original, lang) } : d);
 
-    // Fresh data from the server — after first load or after a save. Take it
-    // wholesale; anything in the form has just been written or was never
-    // entered.
-    if (profile.updated_at !== hydratedAt) {
+    /**
+     * Take the server's copy wholesale ONLY when the form has nothing of the
+     * member's in it — the very first load, or the moment their own save
+     * lands. Both were previously conflated with "updated_at changed", which
+     * was wrong twice over:
+     *
+     *  - profiles and hidden_worlds are separate queries, invalidated
+     *    separately. If profiles came back first, this concluded the save was
+     *    finished and rebuilt the form against the OLD worlds — resurrecting a
+     *    Hidden World the member had just deleted, and saying "Saved!". So a
+     *    completing save now waits for every table to settle.
+     *
+     *  - updated_at also changes for reasons that are not the member's save.
+     *    A curator toggling is_featured fires the same trigger. With
+     *    refetchOnWindowFocus on, coming back to the tab would then wipe an
+     *    unsaved draft with no warning.
+     */
+    const firstLoad = hydratedAt === null;
+    const ourSaveLanded = pendingSave && !refreshing;
+
+    if (profile.updated_at !== hydratedAt && (firstLoad || ourSaveLanded)) {
       setHydratedAt(profile.updated_at);
       setName(profile.full_name);
       setNativeName(profile.native_name ?? '');
@@ -231,9 +256,10 @@ export default function ProfilePage() {
       return;
     }
 
-    // Same data, the member just switched language. Seed a draft for it if
-    // this is the first visit, relabel the read-only rows, and leave every
-    // pending edit — in this language and the other — untouched.
+    // Otherwise the member is mid-edit, or only the language changed. Seed a
+    // draft for a language visited for the first time, relabel the read-only
+    // rows, and leave every pending edit — in this language and the other —
+    // exactly where it is.
     if (!drafts[lang]) {
       const seeded = fieldsFor(profile, lang);
       setDrafts((d) => ({ ...d, [lang]: seeded }));
@@ -242,7 +268,7 @@ export default function ProfilePage() {
     setWorlds((prev) => prev.map((w) => (w.original ? { ...w, name: t(w.original, lang) } : w)));
     setAskTopics((prev) => prev.map(relabel));
     setWantTopics((prev) => prev.map(relabel));
-  }, [profile, lang, hydratedAt, pendingSave, drafts]);
+  }, [profile, lang, hydratedAt, pendingSave, refreshing, drafts]);
 
   const addWorld = () => {
     if (!newWorldName.trim()) return;

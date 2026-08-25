@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { keys } from './client';
+import { bounded, humanise } from './tables';
 import { useMarkNotificationsRead } from './mutations';
 import type { AppNotification } from '@/types';
 
@@ -24,15 +25,19 @@ export function useNotifications() {
 
   const query = useQuery({
     queryKey: keys.notifications,
-    queryFn: async (): Promise<AppNotification[]> => {
+    // Bounded like every other read: retry: 0 only helps once a promise
+    // rejects, and a stalled connection never rejects at all. Without this the
+    // panel spins forever behind a captive portal.
+    queryFn: () => bounded(async (signal) => {
       const { data, error } = await createClient()
         .from('notifications')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(PAGE);
-      if (error) throw new Error(error.message);
+        .limit(PAGE)
+        .abortSignal(signal);
+      if (error) throw new Error(humanise(error.message));
       return (data ?? []) as AppNotification[];
-    },
+    }),
   });
 
   const items = query.data ?? [];
@@ -72,7 +77,10 @@ export function useNotifications() {
     items,
     unreadCount,
     loading: query.isPending,
-    error: query.error ? (query.error as Error).message : '',
+    // Same rule as the views: only report a failure that leaves nothing to
+    // show. A refetch that fails while we hold a good list should not blank
+    // the panel.
+    error: query.error && query.data === undefined ? (query.error as Error).message : '',
     /** Resolves true only if the refresh actually succeeded. */
     refetch: useCallback(async () => {
       const res = await query.refetch();

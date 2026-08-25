@@ -278,6 +278,10 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'common.sending': { en: 'Sending...', zh: '发送中…' },
   'common.unknown_member': { en: 'Unknown member', zh: '未知成员' },
   'common.load_failed': { en: 'Could not load this', zh: '加载失败' },
+  'profile.saved_not_reloaded': {
+    en: 'Saved, but we could not read it back. Reload to see the current version.',
+    zh: '已保存，但无法重新读取。请刷新查看最新版本。',
+  },
   'common.try_again': { en: 'Try again', zh: '重试' },
 };
 

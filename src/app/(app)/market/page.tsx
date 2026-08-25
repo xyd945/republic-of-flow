@@ -486,8 +486,13 @@ function PublishModal({
 
 export default function MarketPage() {
   const { lang, ui } = useI18n();
-  const { listings, viewerProfileId, loading, error: loadError } = useListings();
-  const { matches } = useMatches();
+  const { listings, viewerProfileId, loading: listingsLoading, error: listingsError } = useListings();
+  // Matches has its own loading and error. Ignoring them made a failed matches
+  // query render the Matches tab as "no matches yet" — the exact outage-looks-
+  // like-emptiness bug this refactor exists to remove, reintroduced one tab over.
+  const { matches, loading: matchesLoading, error: matchesError } = useMatches();
+  const loading = listingsLoading || matchesLoading;
+  const loadError = listingsError || matchesError;
   const [tab, setTab] = useState('wanted');
   const [interestFor, setInterestFor] = useState<ListingWithCreator | null>(null);
   const [showPublish, setShowPublish] = useState(false);

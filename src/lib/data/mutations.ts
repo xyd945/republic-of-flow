@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { keys } from './client';
+import { bounded } from './tables';
 import type { CategoryId, Translatable } from '@/types';
 
 /**
@@ -31,14 +32,17 @@ function useRpc<TArgs extends Record<string, unknown>>(fn: string, invalidates: 
   return useMutation({
     // Same reasoning as the queries: fail loudly rather than pause forever.
     networkMode: 'always',
-    mutationFn: async (args: TArgs) => {
-      const { data, error } = await createClient().rpc(fn, args);
+    // Bounded for the same reason as the reads: a stalled request never
+    // rejects, so retry: 0 cannot help and the button stays busy forever.
+    mutationFn: (args: TArgs) => bounded(async (signal) => {
+      const { data, error } = await createClient().rpc(fn, args).abortSignal(signal);
       if (error) throw error;
       return data;
-    },
-    onSuccess: () => {
-      for (const key of invalidates) qc.invalidateQueries({ queryKey: key });
-    },
+    }),
+    // Returned, not fired and forgotten: react-query then waits for the
+    // refetches before the mutation resolves, so a caller that clears its busy
+    // state on resolve is not clearing it over stale data.
+    onSuccess: () => Promise.all(invalidates.map((key) => qc.invalidateQueries({ queryKey: key }))),
   });
 }
 
@@ -114,17 +118,17 @@ export function usePublishListing() {
   const qc = useQueryClient();
   return useMutation({
     networkMode: 'always',
-    mutationFn: async (row: {
+    mutationFn: (row: {
       creator_profile_id: string;
       type: 'wanted' | 'offer';
       title: Translatable;
       description: Translatable;
       status: 'open';
-    }) => {
-      const { error } = await createClient().from('market_listings').insert(row);
+    }) => bounded(async (signal) => {
+      const { error } = await createClient().from('market_listings').insert(row).abortSignal(signal);
       if (error) throw error;
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: keys.listings }); },
+    }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.listings }),
   });
 }
 

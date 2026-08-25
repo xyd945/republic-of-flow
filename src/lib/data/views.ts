@@ -126,17 +126,28 @@ export function usePeople() {
     people,
     viewerProfileId,
     loading: loading && !stuck,
+    /**
+     * True while ANY of the underlying tables is still in flight.
+     *
+     * Callers that must not act on a half-refreshed picture need this.
+     * profiles and hidden_worlds are separate queries invalidated separately,
+     * so after a save one can land before the other — and a screen that joins
+     * them at that moment sees the new profile beside the OLD worlds. The
+     * profile form used to conclude from that mixed snapshot that the save was
+     * done, resurrecting a Hidden World the member had just deleted.
+     */
+    refreshing: profiles.isFetching || worlds.isFetching || viewer.isFetching,
     error: firstError(profiles, worlds, viewer) || (stuck ? STUCK_MESSAGE : ''),
   };
 }
 
 export function useViewerProfile() {
-  const { people, viewerProfileId, loading, error } = usePeople();
+  const { people, viewerProfileId, loading, error, refreshing } = usePeople();
   const profile = useMemo(
     () => people.find((p) => p.id === viewerProfileId) ?? null,
     [people, viewerProfileId]
   );
-  return { profile, viewerProfileId, loading, error };
+  return { profile, viewerProfileId, loading, error, refreshing };
 }
 
 export function useListings() {

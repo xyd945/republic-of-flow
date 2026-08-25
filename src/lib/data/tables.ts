@@ -50,7 +50,7 @@ export type { ProfileRow, ListingRow };
  * told nothing rather than told what happened. Verified by pointing the app at
  * an unreachable host: before this, /people span indefinitely.
  */
-const TIMEOUT_MS = 10_000;
+export const TIMEOUT_MS = 10_000;
 
 /**
  * supabase-js catches a network failure and hands it back as
@@ -58,11 +58,24 @@ const TIMEOUT_MS = 10_000;
  * so it never reaches a `catch (e instanceof TypeError)`. True, and useless to
  * a classmate on a train — the error screen shows this text verbatim.
  */
-function humanise(message: string): string {
+export function humanise(message: string): string {
   if (/failed to fetch|networkerror|load failed/i.test(message)) {
     return 'Could not reach the Republic. Check your connection.';
   }
   return message;
+}
+
+export async function bounded<T>(work: (signal: AbortSignal) => PromiseLike<T>): Promise<T> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    return await work(ctrl.signal);
+  } catch (e) {
+    if (ctrl.signal.aborted) throw new Error('The Republic took too long to answer. Check your connection.');
+    throw e instanceof Error ? new Error(humanise(e.message)) : e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function select<T>(
