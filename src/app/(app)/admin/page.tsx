@@ -121,11 +121,12 @@ export default function AdminPage() {
   };
 
   /**
-   * One call — the dismatch() function closes the match, reopens the listing
-   * and returns the accepted request to pending inside a single transaction.
-   * Previously these were three sequential writes and two of the three errors
-   * were discarded, so a failure could leave a closed match on a listing that
-   * never reopened. Curator-only is enforced inside the function.
+   * One call. dismatch() closes the match, reopens the listing and returns the
+   * accepted request to pending, all inside a single transaction — and, since
+   * 00008, notifies both participants. Previously these were three sequential
+   * writes with two of the three errors discarded, so a failure could leave a
+   * closed match on a listing that never reopened. Curator-only is enforced
+   * inside the function.
    */
   /**
    * One call — the dismatch() function closes the match, reopens the listing

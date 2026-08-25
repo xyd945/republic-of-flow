@@ -7,6 +7,8 @@ import { CATEGORY_COLORS } from '@/lib/seed';
 import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
 import { useDirectory } from '@/lib/supabase/directory';
+import { useNotifications } from '@/lib/supabase/notifications';
+import { NotificationPanel } from '@/components/notification-panel';
 
 function SectionHeading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
@@ -30,6 +32,24 @@ export default function HomePage() {
   const { t, ui, lang } = useI18n();
   const { profiles, listings, viewerProfileId, loading } = useDirectory();
   const [shuffleIdx, setShuffleIdx] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notifications = useNotifications();
+  const unreadCount = notifications.unreadCount;
+
+  /**
+   * Opening the panel is what marks the batch read — matching what the member
+   * has actually now seen. Deliberately not on hover or on page load.
+   */
+  const openNotifications = async () => {
+    setShowNotifications(true);
+    // Refresh first. The hook loads on mount and when the tab regains focus,
+    // so on a tab that never lost focus the panel would otherwise show a
+    // cached list and mark THAT read, silently swallowing anything that
+    // arrived in between.
+    // Only mark read if the refresh actually succeeded. Marking an inbox read
+    // that we failed to load would hide mail the member never saw.
+    if (await notifications.refetch()) notifications.markRead();
+  };
   // Resolved after mount — the server's clock would cause a hydration mismatch.
   const [hour, setHour] = useState<number | null>(null);
   useEffect(() => setHour(new Date().getHours()), []);
@@ -74,8 +94,18 @@ export default function HomePage() {
         <div>
           <WaxSeal size={28} label="R" />
         </div>
-        <button type="button" className="w-9 h-9 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer">
+        <button
+          type="button"
+          onClick={openNotifications}
+          aria-label={ui('notif.title')}
+          className="relative w-9 h-9 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer"
+        >
           <Icon name="bell" size={17} color="var(--color-muted)" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-[3px] -right-[3px] min-w-[17px] h-[17px] px-[4px] grid place-items-center rounded-full bg-red font-display font-bold text-[10px] leading-none text-white">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
         </button>
       </div>
 
@@ -215,6 +245,15 @@ export default function HomePage() {
           </button>
         ))}
       </div>
+
+      {showNotifications && (
+        <NotificationPanel
+          items={notifications.items}
+          loading={notifications.loading}
+          error={notifications.error}
+          onClose={() => setShowNotifications(false)}
+        />
+      )}
     </div>
   );
 }

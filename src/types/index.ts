@@ -117,3 +117,33 @@ export interface MatchWithParties extends Match {
   matched?: ProfileWithHiddenWorlds;
   listing?: MarketListing;
 }
+
+/** In-app notification centre (00008). */
+export type NotificationKind =
+  | 'interest_raised'
+  | 'interest_accepted'
+  | 'interest_declined'
+  | 'suggestion_made'
+  | 'match_undone'
+  | 'match_met';
+
+/**
+ * `payload` is a snapshot taken when the event happened, not a set of joins:
+ * the listing may since have been edited or deleted and the row should still
+ * read correctly. Titles keep their full {en, zh} object, because the reader's
+ * language is not known at write time.
+ */
+export interface AppNotification {
+  id: string;
+  profile_id: string;
+  kind: NotificationKind;
+  payload: {
+    actor_id?: string;
+    actor_name?: string;
+    listing_id?: string;
+    listing_title?: Translatable;
+    match_id?: string;
+  };
+  read_at: string | null;
+  created_at: string;
+}

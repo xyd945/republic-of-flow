@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Avatar, Icon, Chip, Button, Spinner } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
 import { useDirectory } from '@/lib/supabase/directory';
@@ -314,20 +314,36 @@ function InterestModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  // Closing the modal mid-request would otherwise set state on an unmounted
+  // component when the response lands.
+  const alive = useRef(true);
+  // Set true on setup, not just false on teardown: React's development Strict
+  // Mode runs the cleanup once before the real mount, which would otherwise
+  // leave this false for the component's whole life and wedge the button on
+  // "Sending...".
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
   const send = async () => {
     if (!viewerProfileId) { setError(ui('market.profile_loading')); return; }
     setBusy(true);
     setError('');
-    const { error: err } = await createClient().from('market_interests').insert({
-      listing_id: listing.id,
-      profile_id: viewerProfileId,
-      message: msg.trim() ? { [lang]: msg.trim() } : null,
+    // Was a direct insert. It goes through the function now so the listing
+    // owner is notified in the same transaction — a notification written by the
+    // client afterwards could be lost the moment the request fails or the tab
+    // closes. The function also enforces what the UI only ever implied: not
+    // your own listing, still open, and not twice.
+    const { error: err } = await createClient().rpc('raise_interest', {
+      p_listing_id: listing.id,
+      p_message: msg.trim() ? { [lang]: msg.trim() } : null,
     });
-    setBusy(false);
+    if (alive.current) setBusy(false);
     if (err) {
-      setError(err.code === '23505' ? ui('market.already_interested') : err.message);
+      if (alive.current) setError(err.code === '23505' ? ui('market.already_interested') : err.message);
       return;
     }
+    // Deliberately outside the alive check: the request succeeded, so the
+    // parent still needs to refresh even if the member closed this modal while
+    // it was in flight. These are the parent's callbacks, not our state.
     onDone();
     onClose();
   };
