@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, LoadError } from '@/components/ui';
-import { CATEGORY_COLORS } from '@/lib/seed';
+import { Avatar, Icon, LoadError, Segmented } from '@/components/ui';
+import { CATEGORY_COLORS } from '@/lib/categories';
 import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
 import { usePeople } from '@/lib/data/views';
@@ -30,27 +30,6 @@ function SearchField({ value, onChange, placeholder }: { value: string; onChange
           <Icon name="x" size={14} color="var(--color-faint)" />
         </button>
       )}
-    </div>
-  );
-}
-
-function Segmented({ items, value, onChange }: { items: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
-  return (
-    <div className="flex gap-0 rounded-xs overflow-hidden border border-line mb-3">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onChange(item.id)}
-          className="flex-1 py-[8px] border-none cursor-pointer font-display font-bold text-eyebrow tracking-[0.10em] uppercase transition-colors"
-          style={{
-            background: item.id === value ? 'var(--color-ink)' : 'transparent',
-            color: item.id === value ? '#fff' : 'var(--color-muted)',
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
     </div>
   );
 }
@@ -105,6 +84,7 @@ export default function PeoplePage() {
       <SearchField value={search} onChange={setSearch} placeholder={ui('people.search')} />
 
       <Segmented
+        className="mb-3"
         items={[
           { id: 'all', label: ui('people.all') },
           ...CLASSES.map((c) => ({ id: c, label: c })),

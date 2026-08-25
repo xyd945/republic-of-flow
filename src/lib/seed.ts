@@ -329,14 +329,7 @@ export const SEED_MATCHES: (Match & { listing?: MarketListing; initiator?: Profi
   },
 ];
 
-export const CATEGORY_COLORS: Record<string, string> = {
-  craft: '#8f7044',
-  nature: '#465a49',
-  mind: '#405069',
-  build: '#5a4a6a',
-  money: '#6f552f',
-  art: '#8a3a32',
-};
+// CATEGORY_COLORS moved to lib/categories.ts — it is design, not sample data.
 
 export const CATEGORY_ICONS: Record<string, string> = {
   craft: 'star',

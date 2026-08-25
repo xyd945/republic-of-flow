@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, Icon, Chip, Button, Badge, LoadError } from '@/components/ui';
-import { CATEGORY_COLORS } from '@/lib/seed';
+import { CATEGORY_COLORS } from '@/lib/categories';
 import { CATEGORIES, LANGUAGES, t } from '@/lib/i18n/translations';
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
 import { useI18n } from '@/lib/i18n/context';
