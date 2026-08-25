@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { I18nProvider, useI18n } from '@/lib/i18n/context';
-import { DirectoryProvider } from '@/lib/supabase/directory';
+import { DataProvider } from '@/lib/data/client';
 import { BottomNav } from '@/components/ui';
 
 const NAV_ITEMS = [
@@ -15,9 +15,9 @@ const NAV_ITEMS = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider defaultLang="en">
-      <DirectoryProvider>
+      <DataProvider>
         <AppShell>{children}</AppShell>
-      </DirectoryProvider>
+      </DataProvider>
     </I18nProvider>
   );
 }

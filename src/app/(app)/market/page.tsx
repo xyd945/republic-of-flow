@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Avatar, Icon, Chip, Button, Spinner } from '@/components/ui';
+import { Avatar, Icon, Chip, Button, Spinner, LoadError } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
-import { useDirectory } from '@/lib/supabase/directory';
+import { useListings, useMatches } from '@/lib/data/views';
+import {
+  useAcceptInterest, useDeclineInterest, useMarkMatchMet,
+  usePublishListing, useRaiseInterest,
+} from '@/lib/data/mutations';
 import { createClient } from '@/lib/supabase/client';
 import type { ListingWithCreator, ListingInterest, MatchWithParties, Language } from '@/types';
 
@@ -243,6 +247,7 @@ function MarketCard({
 function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => void }) {
   const { t, ui } = useI18n();
   const [busy, setBusy] = useState(false);
+  const markMetMutation = useMarkMatchMet();
   const done = match.status === 'completed';
 
   const [error, setError] = useState('');
@@ -256,10 +261,14 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
   const markMet = async () => {
     setBusy(true);
     setError('');
-    const { error: err } = await createClient().rpc('mark_match_met', { p_match_id: match.id });
-    setBusy(false);
-    if (err) { setError(err.message); return; }
-    onDone();
+    try {
+      await markMetMutation.mutateAsync({ p_match_id: match.id });
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -313,6 +322,7 @@ function InterestModal({
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const raise = useRaiseInterest();
 
   // Closing the modal mid-request would otherwise set state on an unmounted
   // component when the response lands.
@@ -332,10 +342,11 @@ function InterestModal({
     // client afterwards could be lost the moment the request fails or the tab
     // closes. The function also enforces what the UI only ever implied: not
     // your own listing, still open, and not twice.
-    const { error: err } = await createClient().rpc('raise_interest', {
+    const { error: err } = await raise.mutateAsync({
       p_listing_id: listing.id,
       p_message: msg.trim() ? { [lang]: msg.trim() } : null,
-    });
+    }).then(() => ({ error: null as null | { code?: string; message: string } }))
+      .catch((e) => ({ error: e as { code?: string; message: string } }));
     if (alive.current) setBusy(false);
     if (err) {
       if (alive.current) setError(err.code === '23505' ? ui('market.already_interested') : err.message);
@@ -404,22 +415,28 @@ function PublishModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  const publish_ = usePublishListing();
+
   const publish = async () => {
     if (!title.trim()) { setError(ui('market.need_title')); return; }
     if (!viewerProfileId) { setError(ui('market.profile_loading')); return; }
     setBusy(true);
     setError('');
-    const { error: err } = await createClient().from('market_listings').insert({
-      creator_profile_id: viewerProfileId,
-      type,
-      title: { [lang]: title.trim() },
-      description: { [lang]: desc.trim() },
-      status: 'open',
-    });
-    setBusy(false);
-    if (err) { setError(err.message); return; }
-    onDone();
-    onClose();
+    try {
+      await publish_.mutateAsync({
+        creator_profile_id: viewerProfileId,
+        type,
+        title: { [lang]: title.trim() },
+        description: { [lang]: desc.trim() },
+        status: 'open',
+      });
+      onDone();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -469,7 +486,8 @@ function PublishModal({
 
 export default function MarketPage() {
   const { lang, ui } = useI18n();
-  const { listings, matches, viewerProfileId, loading, refetch } = useDirectory();
+  const { listings, viewerProfileId, loading, error: loadError } = useListings();
+  const { matches } = useMatches();
   const [tab, setTab] = useState('wanted');
   const [interestFor, setInterestFor] = useState<ListingWithCreator | null>(null);
   const [showPublish, setShowPublish] = useState(false);
@@ -516,29 +534,35 @@ export default function MarketPage() {
    * matched with no pairing behind it. Ownership is checked inside the
    * function, which also returns a readable message straight to the UI.
    */
+  const accept = useAcceptInterest();
+  const decline = useDeclineInterest();
+
   const acceptInterest = async (interest: ListingInterest) => {
     setBusyKey(`${interest.id}:accept`);
     setError('');
-    const { error: err } = await createClient().rpc('accept_interest', {
-      p_interest_id: interest.id,
-    });
-    setBusyKey(null);
-    if (err) { setError(err.message); return; }
-    refetch();
+    try {
+      await accept.mutateAsync({ p_interest_id: interest.id });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyKey(null);
+    }
   };
 
   const rejectInterest = async (interest: ListingInterest) => {
     setBusyKey(`${interest.id}:reject`);
     setError('');
-    const { error: err } = await createClient().rpc('decline_interest', {
-      p_interest_id: interest.id,
-    });
-    setBusyKey(null);
-    if (err) { setError(err.message); return; }
-    refetch();
+    try {
+      await decline.mutateAsync({ p_interest_id: interest.id });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyKey(null);
+    }
   };
 
   if (loading) return <Loading />;
+  if (loadError) return <LoadError message={loadError} onRetry={() => window.location.reload()} />;
 
   return (
     <div className="px-[18px] pt-[22px]">
@@ -650,7 +674,7 @@ export default function MarketPage() {
         <div>
           {liveMatches.length === 0 && <EmptyState text={ui('market.no_matches')} />}
           {liveMatches.map((m) => (
-            <MatchCard key={m.id} match={m} onDone={refetch} />
+            <MatchCard key={m.id} match={m} onDone={() => {}} />
           ))}
         </div>
       )}
@@ -661,7 +685,7 @@ export default function MarketPage() {
           viewerProfileId={viewerProfileId}
           lang={lang}
           onClose={() => setInterestFor(null)}
-          onDone={refetch}
+          onDone={() => {}}
         />
       )}
       {showPublish && (
@@ -669,7 +693,7 @@ export default function MarketPage() {
           viewerProfileId={viewerProfileId}
           lang={lang}
           onClose={() => setShowPublish(false)}
-          onDone={refetch}
+          onDone={() => {}}
         />
       )}
     </div>

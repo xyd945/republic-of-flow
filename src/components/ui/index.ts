@@ -8,3 +8,4 @@ export { WaxSeal } from './wax-seal';
 export { Wordmark } from './wordmark';
 export { BottomNav } from './bottom-nav';
 export { LanguageSwitcher } from './language-switcher';
+export { LoadError } from './load-error';

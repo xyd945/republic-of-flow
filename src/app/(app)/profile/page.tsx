@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Chip, Button, Badge } from '@/components/ui';
+import { Avatar, Icon, Chip, Button, Badge, LoadError } from '@/components/ui';
 import { CATEGORY_COLORS } from '@/lib/seed';
 import { CATEGORIES, LANGUAGES, t } from '@/lib/i18n/translations';
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
 import { useI18n } from '@/lib/i18n/context';
-import { useProfile, useSignOut } from '@/lib/supabase/hooks';
+import { useSignOut } from '@/lib/supabase/hooks';
+import { useViewerProfile } from '@/lib/data/views';
+import { useSaveProfile } from '@/lib/data/mutations';
 import { createClient } from '@/lib/supabase/client';
 import { CLASSES, DEFAULT_CLASS } from '@/lib/classes';
 import type { Language, CategoryId, Translatable } from '@/types';
@@ -137,8 +139,9 @@ function initialsOf(fullName: string): string {
 export default function ProfilePage() {
   const router = useRouter();
   const { lang, setLang, ui } = useI18n();
-  const { profile, loading, refetch } = useProfile();
+  const { profile, loading, error: loadError } = useViewerProfile();
   const signOut = useSignOut();
+  const save = useSaveProfile();
 
   const [name, setName] = useState('');
   const [nativeName, setNativeName] = useState('');
@@ -264,7 +267,7 @@ export default function ProfilePage() {
     setSaving(true);
     setError('');
 
-    const { error: err } = await createClient().rpc('save_profile', {
+    const payload = {
       p_full_name: name,
       p_native_name: nativeName || null,
       p_class_name: className,
@@ -292,9 +295,15 @@ export default function ProfilePage() {
       // Refuse the save outright if the profile moved under us — better a
       // clear message than one language quietly overwriting the other.
       p_expected_updated_at: profile.updated_at,
-    });
+    };
 
-    if (err) { setSaving(false); setError(err.message); return; }
+    try {
+      await save.mutateAsync(payload);
+    } catch (e) {
+      setSaving(false);
+      setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
 
     // Reload so newly inserted worlds pick up their real ids — otherwise a
     // second Save would send them as new again.
@@ -303,9 +312,13 @@ export default function ProfilePage() {
     // it here would leave the form looking ready while a rehydration is still
     // in flight, and anything typed in that window would be overwritten by it.
     // "Saved!" now means the server has it AND we have read it back.
+    // The mutation has already invalidated profiles and hidden worlds, so the
+    // reload is in flight. Staying in the saving state until it lands is what
+    // makes "Saved!" mean the server has it AND we have read it back.
     setPendingSave(true);
-    refetch();
   };
+
+  if (loadError) return <LoadError message={loadError} onRetry={() => window.location.reload()} />;
 
   if (loading) {
     return (

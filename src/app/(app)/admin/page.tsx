@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Badge, Button, Chip, Spinner } from '@/components/ui';
+import { Avatar, Icon, Badge, Button, Chip, Spinner, LoadError } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
-import { useDirectory } from '@/lib/supabase/directory';
+import { useCuratorView } from '@/lib/data/views';
+import { useCuratorSuggest, useCuratorUpdateMember, useDismatch } from '@/lib/data/mutations';
 import { createClient } from '@/lib/supabase/client';
 import { CLASSES, type ClassName } from '@/lib/classes';
 import type { MatchWithParties } from '@/types';
@@ -51,7 +52,10 @@ function Notice({ tone, children }: { tone: 'ok' | 'err'; children: React.ReactN
 export default function AdminPage() {
   const router = useRouter();
   const { t, lang, ui } = useI18n();
-  const { profiles, listings, matches, viewerProfileId, loading, refetch } = useDirectory();
+  const { people: profiles, listings, matches, viewerProfileId, loading, error } = useCuratorView();
+  const updateMember = useCuratorUpdateMember();
+  const dismatchMutation = useDismatch();
+  const suggest = useCuratorSuggest();
   const [tab, setTab] = useState('people');
   const [suggestListing, setSuggestListing] = useState('');
   const [suggestPerson, setSuggestPerson] = useState('');
@@ -84,6 +88,8 @@ export default function AdminPage() {
     );
   }
 
+  if (error) return <LoadError message={error} onRetry={() => window.location.reload()} />;
+
   if (!isCurator) {
     return (
       <div className="p-[18px] text-center pt-20">
@@ -109,15 +115,18 @@ export default function AdminPage() {
     key: string,
   ) => {
     setBusyKey(key);
-    const { error } = await createClient().rpc('curator_update_member', {
-      p_profile_id: id,
-      p_is_featured: patch.is_featured ?? null,
-      p_is_active: patch.is_active ?? null,
-      p_class_name: patch.class_name ?? null,
-    });
-    setBusyKey(null);
-    if (error) { setMatchState({ tone: 'err', msg: error.message }); return; }
-    refetch();
+    try {
+      await updateMember.mutateAsync({
+        p_profile_id: id,
+        p_is_featured: patch.is_featured ?? null,
+        p_is_active: patch.is_active ?? null,
+        p_class_name: patch.class_name ?? null,
+      });
+    } catch (e) {
+      setMatchState({ tone: 'err', msg: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyKey(null);
+    }
   };
 
   /**
@@ -130,11 +139,14 @@ export default function AdminPage() {
    */
   const dismatch = async (match: MatchWithParties) => {
     setBusyKey(`${match.id}:dismatch`);
-    const { error } = await createClient().rpc('dismatch', { p_match_id: match.id });
-    setBusyKey(null);
-    if (error) { setMatchState({ tone: 'err', msg: error.message }); return; }
-    setMatchState({ tone: 'ok', msg: ui('admin.dismatched') });
-    refetch();
+    try {
+      await dismatchMutation.mutateAsync({ p_match_id: match.id });
+      setMatchState({ tone: 'ok', msg: ui('admin.dismatched') });
+    } catch (e) {
+      setMatchState({ tone: 'err', msg: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyKey(null);
+    }
   };
 
   const sendSuggestion = async () => {
@@ -145,18 +157,21 @@ export default function AdminPage() {
     setBusyKey('suggest');
     // suggested_* is no longer directly writable — a member could otherwise
     // forge a curator endorsement on their own listing.
-    const { error } = await createClient().rpc('curator_suggest', {
-      p_listing_id: suggestListing,
-      p_profile_id: suggestPerson,
-      p_reason: suggestReason.trim() ? { [lang]: suggestReason.trim() } : null,
-    });
-    setBusyKey(null);
-    if (error) { setSuggestState({ tone: 'err', msg: error.message }); return; }
-    setSuggestState({ tone: 'ok', msg: ui('admin.suggestion_sent') });
-    setSuggestListing('');
-    setSuggestPerson('');
-    setSuggestReason('');
-    refetch();
+    try {
+      await suggest.mutateAsync({
+        p_listing_id: suggestListing,
+        p_profile_id: suggestPerson,
+        p_reason: suggestReason.trim() ? { [lang]: suggestReason.trim() } : null,
+      });
+      setSuggestState({ tone: 'ok', msg: ui('admin.suggestion_sent') });
+      setSuggestListing('');
+      setSuggestPerson('');
+      setSuggestReason('');
+    } catch (e) {
+      setSuggestState({ tone: 'err', msg: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyKey(null);
+    }
   };
 
   const sendInvite = async () => {
@@ -178,7 +193,6 @@ export default function AdminPage() {
       setInviteState({ tone: 'ok', msg: `${ui('admin.invitation_sent')} ${email}` });
       setInviteEmail('');
       setInviteRole('');
-      refetch();
     } catch (e) {
       setInviteState({ tone: 'err', msg: e instanceof Error ? e.message : ui('admin.invitation_failed') });
     } finally {
