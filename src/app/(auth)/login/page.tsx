@@ -84,7 +84,7 @@ export default function LoginPage() {
             }}>{ui('auth.republic_desc')}</p>
           </div>
 
-          <main className="flex-1 overflow-y-auto no-scrollbar" style={{ padding: '20px 16px 24px', display: 'flex', flexDirection: 'column' }}>
+          <main data-scroll-region className="flex-1 overflow-y-auto no-scrollbar" style={{ padding: '20px 16px 24px', display: 'flex', flexDirection: 'column' }}>
             {step === 'email' ? (
               <div style={{ display: 'grid', gap: 16 }}>
                 <div>

@@ -106,7 +106,9 @@ export default function PeoplePage() {
       {/* the roll */}
       <div style={{ display: 'grid', gap: 11 }}>
         {filtered.map((p) => (
-          <Panel key={p.id} pad={12} innerRule={false} onClick={() => router.push(`/people/${p.id}`)}>
+          <Panel key={p.id} pad={12} innerRule={false}
+            ariaLabel={`${ui('dossier.title')} — ${p.full_name}`}
+            onClick={() => router.push(`/people/${p.id}`)}>
             <div className="flex items-start" style={{ gap: 11 }}>
               <Avatar initials={p.initials} id={p.id} size={44} featured={p.is_featured} />
               <div style={{ minWidth: 0, flex: 1 }}>

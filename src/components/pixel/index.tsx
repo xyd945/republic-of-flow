@@ -12,7 +12,8 @@
  * shadows with zero blur, stepped motion, and integer type sizes.
  */
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useOverlay } from './overlay';
 
 /* ------------------------------------------------------------------ text */
 
@@ -93,18 +94,25 @@ export type PanelTone = keyof typeof PANEL_TONES;
  */
 export function Panel({
   children, tone = 'cream', pad = 16, corners = false, innerRule = true, shadow = true,
-  accent, className = '', style, onClick,
+  accent, className = '', style, onClick, ariaLabel,
 }: {
   children: ReactNode; tone?: PanelTone; pad?: number; corners?: boolean; innerRule?: boolean;
-  shadow?: boolean; accent?: string; className?: string; style?: CSSProperties; onClick?: () => void;
+  shadow?: boolean; accent?: string; className?: string; style?: CSSProperties;
+  onClick?: () => void; ariaLabel?: string;
 }) {
   const t = PANEL_TONES[tone];
   const rule = innerRule ? `inset 0 0 0 3px ${t.bg}, inset 0 0 0 4px var(--color-gold)` : '';
   const drop = shadow ? 'var(--shadow-px)' : '';
   const box = [rule, drop].filter(Boolean).join(', ');
+  /* A clickable panel renders as a real <button>. It was a <div onClick>, which
+     is invisible to Tab and deaf to Enter — and the people directory is built
+     entirely out of these, so keyboard users could not open a single dossier.
+     None of the clickable panels nest their own controls, so the button
+     element is safe here. */
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div
-      onClick={onClick}
+    <Tag
+      {...(onClick ? { type: 'button' as const, onClick, 'aria-label': ariaLabel } : {})}
       className={`relative ${onClick ? 'cursor-pointer text-left w-full' : ''} ${className}`}
       style={{
         background: t.bg, color: t.fg,
@@ -112,6 +120,9 @@ export function Panel({
         borderRadius: 0,
         padding: innerRule ? pad + 4 : pad,
         boxShadow: box || undefined,
+        // A <button> supplies its own font, alignment and box sizing; a <div>
+        // must keep its own, so this reset is applied only when it is a button.
+        ...(onClick ? { font: 'inherit', textAlign: 'left' as const, display: 'block', width: '100%' } : {}),
         ...style,
       }}
     >
@@ -126,7 +137,7 @@ export function Panel({
         );
       })}
       {children}
-    </div>
+    </Tag>
   );
 }
 
@@ -158,11 +169,15 @@ export type ButtonTone = keyof typeof BUTTON_TONES;
  */
 export function Button({
   children, cn, tone = 'primary', size = 'md', block = false, disabled = false, loading = false,
-  icon, onClick, type = 'button', className = '', style,
+  icon, onClick, type = 'button', className = '', style, ariaLabel, ariaPressed, title,
 }: {
   children: ReactNode; cn?: string; tone?: ButtonTone; size?: keyof typeof BUTTON_SIZES;
   block?: boolean; disabled?: boolean; loading?: boolean; icon?: ReactNode;
   onClick?: () => void; type?: 'button' | 'submit'; className?: string; style?: CSSProperties;
+  /* A glyph is not a name. Any button whose whole label is ★ or ON needs these
+     two, or a screen reader announces a row of identical "star button"s with
+     no member, no action and no state. */
+  ariaLabel?: string; ariaPressed?: boolean; title?: string;
 }) {
   const [hover, setHover] = useState(false);
   const [press, setPress] = useState(false);
@@ -175,6 +190,9 @@ export function Button({
       type={type}
       disabled={off_}
       onClick={onClick}
+      aria-label={ariaLabel}
+      aria-pressed={ariaPressed}
+      title={title ?? ariaLabel}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => { setHover(false); setPress(false); }}
       onMouseDown={() => setPress(true)}
@@ -394,16 +412,7 @@ export function Sheet({
 }: {
   title: string; cn?: string; onClose: () => void; children: ReactNode; footer?: ReactNode;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
+  useOverlay(onClose);
 
   return (
     <div

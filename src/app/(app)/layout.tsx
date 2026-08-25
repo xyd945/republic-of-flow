@@ -69,7 +69,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
               </>
             }
           />
-          <main className="flex-1 overflow-y-auto no-scrollbar">{children}</main>
+          <main data-scroll-region className="flex-1 overflow-y-auto no-scrollbar">{children}</main>
           <TabBar active={activeTab} onChange={(id) => router.push(id)} />
         </div>
       </div>

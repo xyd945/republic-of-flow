@@ -257,6 +257,7 @@ export default function AdminPage() {
                     value={CLASSES.includes(p.class_name as ClassName) ? p.class_name : ''}
                     disabled={busyKey !== null}
                     onChange={(e) => patchProfile(p.id, { class_name: e.target.value }, `${p.id}:class`)}
+                    aria-label={`${ui('profile.class')} — ${p.full_name}`}
                     className="rof-label"
                     style={{
                       marginTop: 4, padding: '3px 5px', background: 'var(--color-white)',
@@ -278,6 +279,8 @@ export default function AdminPage() {
                     size="sm"
                     disabled={busyKey !== null && busyKey !== `${p.id}:feat`}
                     loading={busyKey === `${p.id}:feat`}
+                    ariaPressed={p.is_featured}
+                    ariaLabel={`${p.is_featured ? ui('admin.unfeature') : ui('admin.feature')} — ${p.full_name}`}
                     onClick={() => patchProfile(p.id, { is_featured: !p.is_featured }, `${p.id}:feat`)}
                   >{p.is_featured ? '★' : '☆'}</Button>
                   <Button
@@ -290,6 +293,8 @@ export default function AdminPage() {
                         ? setConfirmOff({ id: p.id, name: p.full_name })
                         : patchProfile(p.id, { is_active: true }, `${p.id}:active`)
                     }
+                    ariaPressed={p.is_active}
+                    ariaLabel={`${p.is_active ? ui('admin.deactivate') : ui('admin.activate')} — ${p.full_name}`}
                   >{p.is_active ? 'ON' : 'OFF'}</Button>
                 </div>
               </div>

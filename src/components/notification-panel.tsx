@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bi, ErrorNote, PixelSpinner } from '@/components/pixel';
+import { useOverlay } from '@/components/pixel/overlay';
 import { useI18n } from '@/lib/i18n/context';
 import { t } from '@/lib/i18n/translations';
 import type { AppNotification, Language } from '@/types';
@@ -63,17 +63,9 @@ export function NotificationPanel({
   const router = useRouter();
   const { lang, ui } = useI18n();
 
-  // Escape closes, and the page behind must not scroll while this is open.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
+  // Escape closes and the page behind is locked — both through the shared
+  // registry, so a second open layer cannot corrupt the restore.
+  useOverlay(onClose);
 
   // Every kind of notification is about something in the Market, so they all
   // land there. The Market's tabs are component state rather than URL state,

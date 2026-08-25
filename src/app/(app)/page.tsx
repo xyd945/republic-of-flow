@@ -155,7 +155,8 @@ export default function HomePage() {
       {pick && (
         <section>
           <SectionHeader cn="今日隐藏世界" className="mb-3">Hidden World of the Day</SectionHeader>
-          <Panel pad={14} onClick={() => router.push(`/people/${pick.p.id}`)}>
+          <Panel pad={14} ariaLabel={`${ui('dossier.title')} — ${pick.p.full_name}`}
+            onClick={() => router.push(`/people/${pick.p.id}`)}>
             <Bi en="Hidden World" zh="隐藏世界" color="var(--color-gold)" />
             <div style={{
               fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
@@ -185,7 +186,8 @@ export default function HomePage() {
         </SectionHeader>
         <div style={{ display: 'grid', gap: 12 }}>
           {[wanted, offer].filter(Boolean).map((l) => (
-            <Panel key={l!.id} pad={13} onClick={() => router.push('/market')}>
+            <Panel key={l!.id} pad={13} ariaLabel={ui('market.title')}
+                onClick={() => router.push('/market')}>
               <div className="flex items-center" style={{ gap: 7, marginBottom: 8 }}>
                 <StatusChip tone={l!.type === 'wanted' ? 'wanted' : 'offer'} cn={l!.type === 'wanted' ? '寻找' : '提供'}>
                   {l!.type === 'wanted' ? 'Wanted' : 'Offer'}

@@ -288,7 +288,14 @@ export default function ProfilePage() {
       p_intro: mergeDrafts(profile.intro as Translatable, drafts, seeds, 'intro'),
       p_professional: mergeDrafts(profile.professional as Translatable, drafts, seeds, 'professional'),
       p_contact_kind: contactKind,
-      p_contact_value: contactValue,
+      /* "Find me in class" means there is no handle to hand out, so the stored
+         one is cleared rather than merely hidden. The form stops showing the
+         field for this kind, and the dossier prints contact_value whenever it
+         is non-empty regardless of kind — so leaving the old value behind
+         would keep publishing an address the member believes they withdrew,
+         with no field left anywhere to clear it. Switching to "find me in
+         class" and saving is now the way to take an address down. */
+      p_contact_value: contactKind === 'class' ? '' : contactValue,
       p_ask_topics: askTopics.map((d) => draftValue(d, lang)),
       p_want_topics: wantTopics.map((d) => draftValue(d, lang)),
       p_hidden_worlds: worlds.map((w, i) => ({
@@ -558,7 +565,13 @@ export default function ProfilePage() {
           </Field>
           {/* "Find me in class" needs no handle, so the field would only invite
               a value that is never read. */}
-          {contactKind !== 'class' && (
+          {contactKind === 'class' ? (
+            <p style={{ margin: 0, fontSize: 'var(--text-small)', color: 'var(--color-muted)', lineHeight: 1.55 }}>
+              {lang === 'zh'
+                ? '保存后将清除已保存的联系方式，你的档案上不会再显示任何账号。'
+                : 'Saving clears any stored handle — your dossier will show no address.'}
+            </p>
+          ) : (
             <Field label={ui('profile.contact_value')} cn="账号">
               <input className="rof-input" type="text" value={contactValue} onChange={(e) => setContactValue(e.target.value)} />
             </Field>
@@ -569,7 +582,9 @@ export default function ProfilePage() {
       <Divider />
 
       {profile.is_curator && (
-        <Panel pad={12} tone="navy" innerRule={false} onClick={() => router.push('/admin')}>
+        <Panel pad={12} tone="navy" innerRule={false}
+          ariaLabel={ui('profile.curator_desk')}
+          onClick={() => router.push('/admin')}>
           <div className="flex items-center" style={{ gap: 10 }}>
             <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)' }}>[*]</span>
             <span className="rof-label inline-flex items-baseline" style={{ gap: 6, color: 'var(--color-gold)', flex: 1 }}>
