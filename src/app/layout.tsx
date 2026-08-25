@@ -1,36 +1,26 @@
 import type { Metadata, Viewport } from 'next';
-import { EB_Garamond, Cinzel, Noto_Serif_SC, Caveat } from 'next/font/google';
 import './globals.css';
 
-// These deliberately do NOT reuse the design-token names (--font-serif etc.).
-// next/font emits `--font-x: "Family", "Family Fallback"` and would overwrite
-// the token, throwing away the CJK and Georgia tiers of the stack — which left
-// every Chinese glyph rendering in a substitute face. globals.css composes the
-// real stacks from these single-family variables instead.
-const garamond = EB_Garamond({
-  subsets: ['latin'],
-  variable: '--font-garamond',
-  display: 'swap',
-});
-
-const cinzel = Cinzel({
-  subsets: ['latin'],
-  variable: '--font-cinzel',
-  display: 'swap',
-});
-
-const notoSerifSC = Noto_Serif_SC({
-  subsets: ['latin'],
-  weight: ['400', '700'],
-  variable: '--font-noto-sc',
-  display: 'swap',
-});
-
-const caveat = Caveat({
-  subsets: ['latin'],
-  variable: '--font-caveat',
-  display: 'swap',
-});
+/**
+ * The bitmap faces are loaded with a plain <link>, not next/font.
+ *
+ * Two reasons, both learned here. next/font emits its own `--font-*` CSS
+ * variables and would overwrite the type tokens in globals.css — that is
+ * exactly how the CJK tier of the old stack got clobbered, leaving every
+ * Chinese glyph in a substitute face. And a CSS `@import` cannot be used
+ * either: `@import "tailwindcss"` expands inline, so any import after it lands
+ * mid-stylesheet and fails to parse, while an import before it is fragile to
+ * reorder later. A link in the head is immune to both.
+ *
+ * PIXEL RULE: these faces are only ever rendered at 8/10/12/16/24/32px.
+ * A fractional size puts the glyph off the pixel grid and it turns to mush.
+ */
+const FONT_HREF =
+  'https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700' +
+  '&family=Pixelify+Sans:wght@400;500;600;700' +
+  '&family=DotGothic16' +
+  '&family=Press+Start+2P' +
+  '&display=swap';
 
 export const metadata: Metadata = {
   title: 'Republic of FLOW',
@@ -41,11 +31,17 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  themeColor: '#0F1E34',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${garamond.variable} ${cinzel.variable} ${notoSerifSC.variable} ${caveat.variable}`}>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={FONT_HREF} />
+      </head>
       <body>{children}</body>
     </html>
   );

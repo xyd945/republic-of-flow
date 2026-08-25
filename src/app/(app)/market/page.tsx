@@ -1,23 +1,58 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Avatar, Icon, Chip, Button, Spinner, LoadError, Segmented } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
 import { useListings, useMatches } from '@/lib/data/views';
 import {
   useAcceptInterest, useDeclineInterest, useMarkMatchMet,
   usePublishListing, useRaiseInterest,
 } from '@/lib/data/mutations';
-import { createClient } from '@/lib/supabase/client';
+import { LoadError } from '@/components/ui';
+import { Page } from '@/components/pixel/shell';
+import {
+  Avatar, Bi, Button, Divider, EmptyState, ErrorNote, Panel,
+  PixelSpinner, SectionHeader, Sheet, StatusChip,
+} from '@/components/pixel';
 import type { ListingWithCreator, ListingInterest, MatchWithParties, Language } from '@/types';
+
+/* ------------------------------------------------------------- segmented */
+
+/** Hard-edged tab strip. The design's rounded pills are not in this system. */
+function Tabs({
+  items, value, onChange,
+}: { items: { id: string; label: string; cn?: string; badge?: number }[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <div style={{ display: 'flex', border: '2px solid var(--color-navy-900)', boxShadow: 'var(--shadow-px)' }}>
+      {items.map((it) => {
+        const on = value === it.id;
+        return (
+          <button key={it.id} type="button" onClick={() => onChange(it.id)}
+            className="rof-label flex-1"
+            style={{
+              position: 'relative', padding: '9px 4px', border: 'none', borderRadius: 0,
+              cursor: 'pointer', lineHeight: 1,
+              background: on ? 'var(--color-navy-900)' : 'transparent',
+              color: on ? 'var(--color-gold)' : 'var(--color-muted)',
+            }}>
+            {it.label}
+            {it.badge ? (
+              <span className="rof-label" style={{
+                marginLeft: 4, padding: '1px 3px', background: 'var(--color-red)',
+                color: '#F7E7E2', fontSize: 'var(--text-small)',
+              }}>{it.badge}</span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------- request row */
 
 /** One incoming request, shown only to the listing owner. */
 function RequestRow({
-  interest,
-  actionable,
-  busyKey,
-  onAccept,
-  onReject,
+  interest, actionable, busyKey, onAccept, onReject,
 }: {
   interest: ListingInterest;
   actionable: boolean;
@@ -35,48 +70,35 @@ function RequestRow({
   const locked = busyKey !== null;
 
   return (
-    <div
-      className="flex items-start gap-[10px] p-[10px] rounded-xs border border-line"
-      style={{ opacity: interest.status === 'declined' || (!actionable && !settled) ? 0.55 : 1 }}
-    >
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 9, padding: 9,
+      border: '2px solid var(--color-line)', background: 'var(--color-white)',
+      opacity: interest.status === 'declined' || (!actionable && !settled) ? 0.55 : 1,
+    }}>
       <Avatar initials={interest.profile?.initials ?? '?'} id={interest.profile_id} size={30} />
-      <div className="flex-1 min-w-0">
-        <div className="font-serif font-semibold text-xs text-ink truncate">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="truncate" style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>
           {interest.profile?.full_name ?? '—'}
         </div>
-        {interest.message && (
-          <div className="font-serif text-xs text-muted italic leading-[1.45] mt-[2px]">
+        {interest.message ? (
+          <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-muted)', marginTop: 3, lineHeight: 1.5 }}>
             {t(interest.message)}
           </div>
-        )}
+        ) : null}
       </div>
 
       {interest.status === 'accepted' ? (
-        <Chip variant="wash" tone="green">{ui('market.accepted')}</Chip>
+        <StatusChip tone="open">{ui('market.accepted')}</StatusChip>
       ) : interest.status === 'declined' ? (
-        <Chip variant="wash" tone="neutral">{ui('market.rejected')}</Chip>
+        <StatusChip tone="closed">{ui('market.rejected')}</StatusChip>
       ) : actionable ? (
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            title={ui('market.accept')}
-            disabled={locked}
-            onClick={onAccept}
-            className="w-7 h-7 grid place-items-center rounded-full cursor-pointer bg-transparent"
-            style={{ border: '1px solid var(--color-green)', opacity: locked && !accepting ? 0.4 : 1 }}
-          >
-            {accepting ? <Spinner size={12} color="var(--color-green)" /> : <Icon name="check" size={13} color="var(--color-green)" />}
-          </button>
-          <button
-            type="button"
-            title={ui('market.reject')}
-            disabled={locked}
-            onClick={onReject}
-            className="w-7 h-7 grid place-items-center rounded-full cursor-pointer bg-transparent"
-            style={{ border: '1px solid var(--color-line)', opacity: locked && !rejecting ? 0.4 : 1 }}
-          >
-            {rejecting ? <Spinner size={12} color="var(--color-faint)" /> : <Icon name="x" size={13} color="var(--color-faint)" />}
-          </button>
+        <div style={{ display: 'flex', gap: 5, flex: 'none' }}>
+          <Button tone="green" size="sm" onClick={onAccept} disabled={locked && !accepting} loading={accepting}>
+            {ui('market.accept')}
+          </Button>
+          <Button tone="secondary" size="sm" onClick={onReject} disabled={locked && !rejecting} loading={rejecting}>
+            {ui('market.reject')}
+          </Button>
         </div>
       ) : null}
     </div>
@@ -88,30 +110,31 @@ function SentRow({ listing }: { listing: ListingWithCreator }) {
   const { t, ui } = useI18n();
   const s = listing.viewer_interest_status;
   const [label, tone] =
-    s === 'accepted' ? [ui('market.youre_matched'), 'green' as const]
-    : s === 'declined' ? [ui('market.not_selected'), 'neutral' as const]
-    : listing.status === 'matched' ? [ui('market.already_matched'), 'neutral' as const]
+    s === 'accepted' ? [ui('market.youre_matched'), 'open' as const]
+    : s === 'declined' ? [ui('market.not_selected'), 'closed' as const]
+    : listing.status === 'matched' ? [ui('market.already_matched'), 'closed' as const]
     : [ui('market.interest_sent'), 'neutral' as const];
 
   return (
-    <div className="flex items-center gap-3 p-[10px] rounded-xs border border-line">
-      <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={30} />
-      <div className="flex-1 min-w-0">
-        <div className="font-serif font-semibold text-xs text-ink truncate">{t(listing.title)}</div>
-        <div className="font-serif text-xs text-faint truncate">{listing.creator?.full_name ?? ui('common.unknown_member')}</div>
+    <Panel pad={10} innerRule={false}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={30} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="truncate" style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>{t(listing.title)}</div>
+          <div className="truncate" style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 2 }}>
+            {listing.creator?.full_name ?? ui('common.unknown_member')}
+          </div>
+        </div>
+        <StatusChip tone={tone}>{label}</StatusChip>
       </div>
-      <Chip variant="wash" tone={tone}>{label}</Chip>
-    </div>
+    </Panel>
   );
 }
 
+/* --------------------------------------------------------- listing card */
+
 function MarketCard({
-  listing,
-  viewerProfileId,
-  busyKey,
-  onInterest,
-  onAccept,
-  onReject,
+  listing, viewerProfileId, busyKey, onInterest, onAccept, onReject,
 }: {
   listing: ListingWithCreator;
   viewerProfileId: string | null;
@@ -124,6 +147,7 @@ function MarketCard({
   const isMine = listing.creator_profile_id === viewerProfileId;
   const isMatched = listing.status === 'matched';
   const mine = listing.viewer_interest_status;
+  const wanted = listing.type === 'wanted';
 
   // A non-owner's button reflects where they stand, not just whether they clicked.
   const viewerLabel = isMatched && mine !== 'accepted'
@@ -134,57 +158,60 @@ function MarketCard({
     : ui('market.interested');
 
   return (
-    <div className="sheet p-[16px] mb-3">
-      <div className="flex items-start gap-3 mb-[10px]">
+    <Panel pad={13} accent={wanted ? 'var(--color-red)' : 'var(--color-sage)'}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={38} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-[2px]">
-            <Chip variant="wash" tone={listing.type === 'wanted' ? 'red' : 'green'}>
-              {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offer_one')}
-            </Chip>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <StatusChip tone={wanted ? 'wanted' : 'offer'} cn={wanted ? '寻求' : '提供'}>
+              {wanted ? ui('market.wanted') : ui('market.offer_one')}
+            </StatusChip>
             {/* Status, not a count: RLS hides other members' interest rows, so
                 any number rendered to a non-owner would be wrong. */}
-            <span className="font-serif text-eyebrow text-faint">
+            <StatusChip tone={isMatched ? 'matched' : 'open'}>
               {isMatched ? ui('market.status_matched') : ui('market.status_open')}
-            </span>
+            </StatusChip>
           </div>
-          <div className="font-serif font-semibold text-base text-ink leading-[1.35]">{t(listing.title)}</div>
-          <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name ?? ui('common.unknown_member')}</div>
+          <div style={{
+            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+            letterSpacing: 'var(--tracking-display)', color: 'var(--color-ink)',
+            marginTop: 7, lineHeight: 1.3,
+          }}>{t(listing.title)}</div>
+          <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 3 }}>
+            {listing.creator?.full_name ?? ui('common.unknown_member')}
+          </div>
         </div>
       </div>
-      <div className="font-serif text-sm text-muted leading-[1.6] mb-3">{t(listing.description)}</div>
-      <div className="flex flex-wrap gap-[5px] mb-3">
-        {listing.chips.map((chip, i) => (
-          <Chip key={i}>{t(chip)}</Chip>
-        ))}
-      </div>
+
+      {t(listing.description) ? (
+        <p style={{ margin: '11px 0 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
+          {t(listing.description)}
+        </p>
+      ) : null}
+
+      {listing.chips.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 10 }}>
+          {listing.chips.map((chip, i) => <StatusChip key={i} tone="neutral">{t(chip)}</StatusChip>)}
+        </div>
+      )}
 
       {isMine ? (
-        <div>
-          <div className="flex items-baseline justify-between mb-[8px]">
-            <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze">
-              {ui('market.requests')}
-            </span>
-            <span className="font-serif text-xs text-faint italic">{ui('market.your_listing')}</span>
-          </div>
+        <div style={{ marginTop: 12 }}>
+          <SectionHeader cn="收到的请求" trailing={
+            <span className="rof-label" style={{ color: 'var(--color-faint)' }}>{ui('market.your_listing')}</span>
+          } className="mb-2">{ui('market.requests')}</SectionHeader>
           {listing.interests.length === 0 ? (
-            <div className="font-serif text-xs text-faint">{ui('market.no_requests')}</div>
+            <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-faint)' }}>{ui('market.no_requests')}</div>
           ) : (
             <>
-              <div className="flex flex-col gap-[6px]">
+              <div style={{ display: 'grid', gap: 6 }}>
                 {listing.interests.map((i) => (
-                  <RequestRow
-                    key={i.id}
-                    interest={i}
-                    actionable={!isMatched}
-                    busyKey={busyKey}
-                    onAccept={() => onAccept(i)}
-                    onReject={() => onReject(i)}
-                  />
+                  <RequestRow key={i.id} interest={i} actionable={!isMatched} busyKey={busyKey}
+                    onAccept={() => onAccept(i)} onReject={() => onReject(i)} />
                 ))}
               </div>
               {!isMatched && listing.interests.some((i) => i.status === 'pending') && (
-                <div className="font-serif text-xs text-faint italic mt-[8px]">
+                <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 8 }}>
                   {ui('market.pick_one')}
                 </div>
               )}
@@ -192,43 +219,39 @@ function MarketCard({
           )}
         </div>
       ) : (
-        <Button
-          tone="bronze"
-          variant="outline"
-          size="sm"
-          onClick={onInterest}
-          disabled={mine !== null || isMatched}
-          icon={<Icon name="arrow-right" size={13} color="var(--color-bronze-deep)" />}
-        >
-          {viewerLabel}
-        </Button>
-      )}
-
-      {listing.suggested_profile && (
-        <div className="mt-3 pt-3 border-t border-line-soft">
-          <div className="flex items-center gap-[6px] mb-[6px]">
-            <Icon name="shield" size={12} color="var(--color-bronze)" />
-            <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze">{ui('market.curator_suggestion')}</span>
-          </div>
-          <div className="flex items-center gap-[10px]">
-            <Avatar initials={listing.suggested_profile.initials} id={listing.suggested_profile.id} size={30} />
-            <div className="flex-1 min-w-0">
-              <div className="font-serif font-semibold text-xs text-ink">{listing.suggested_profile.full_name}</div>
-              <div className="font-serif text-xs text-faint italic leading-[1.4]">{t(listing.suggested_reason)}</div>
-            </div>
-          </div>
+        <div style={{ marginTop: 12 }}>
+          <Button tone="primary" size="sm" onClick={onInterest} disabled={mine !== null || isMatched}>
+            {viewerLabel}
+          </Button>
         </div>
       )}
-    </div>
+
+      {listing.suggested_profile ? (
+        <>
+          <Divider className="my-3" />
+          <Bi en="Curator Suggestion" zh="策展人推荐" color="var(--color-gold)" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 7 }}>
+            <Avatar initials={listing.suggested_profile.initials} id={listing.suggested_profile.id} size={30} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>{listing.suggested_profile.full_name}</div>
+              <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', lineHeight: 1.45, marginTop: 2 }}>
+                {t(listing.suggested_reason)}
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </Panel>
   );
 }
+
+/* ------------------------------------------------------------ match card */
 
 function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => void }) {
   const { t, ui } = useI18n();
   const [busy, setBusy] = useState(false);
   const markMetMutation = useMarkMatchMet();
   const done = match.status === 'completed';
-
   const [error, setError] = useState('');
 
   /**
@@ -251,45 +274,48 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
   };
 
   return (
-    <div className="sheet p-[16px] mb-3">
-      <div className="flex items-center gap-[6px] mb-[10px]">
-        <Icon name="check" size={14} color="var(--color-green)" />
-        <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-green">{ui('market.matched')}</span>
-      </div>
-      <div className="flex items-center gap-3 mb-3">
+    <Panel pad={13} tone="gold" corners>
+      <Bi en={ui('market.matched')} zh="已配对" color="var(--color-navy-900)" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 10 }}>
         <Avatar initials={match.initiator?.initials ?? '?'} id={match.initiator_profile_id} size={36} />
-        <div className="font-serif text-sm text-muted">&harr;</div>
+        <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)', flex: 'none' }}>&lt;&gt;</span>
         <Avatar initials={match.matched?.initials ?? '?'} id={match.matched_profile_id} size={36} />
-        <div className="flex-1 min-w-0">
-          <div className="font-serif font-semibold text-sm text-ink">{match.initiator?.full_name ?? ui('common.unknown_member')} & {match.matched?.full_name ?? ui('common.unknown_member')}</div>
-          <div className="font-serif text-xs text-muted truncate">{t(match.listing?.title)}</div>
-        </div>
-      </div>
-      {match.next_step && (
-        <div className="p-[10px] rounded-xs mb-3" style={{ background: 'var(--color-green-wash)' }}>
-          <div className="font-serif text-xs text-green leading-[1.5]">
-            <strong>{ui('market.next_step')}</strong> {t(match.next_step)}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)', lineHeight: 1.35 }}>
+            {match.initiator?.full_name ?? ui('common.unknown_member')} &amp; {match.matched?.full_name ?? ui('common.unknown_member')}
+          </div>
+          <div className="truncate" style={{ fontSize: 'var(--text-small)', color: 'var(--color-muted)', marginTop: 2 }}>
+            {t(match.listing?.title)}
           </div>
         </div>
-      )}
-      {error && (
-        <div className="mb-2 flex items-center gap-[7px] font-serif text-xs text-red">
-          <Icon name="x" size={14} color="var(--color-red)" />{error}
+      </div>
+
+      {match.next_step ? (
+        <div style={{
+          marginTop: 11, padding: 9, background: 'var(--color-sage-tint)',
+          border: '2px solid var(--color-sage)', fontSize: 'var(--text-body)',
+          color: '#3F5742', lineHeight: 1.5,
+        }}>
+          <Bi en={ui('market.next_step')} color="#3F5742" />
+          <div style={{ marginTop: 4 }}>{t(match.next_step)}</div>
         </div>
-      )}
-      <Button tone="green" size="sm" onClick={markMet} loading={busy} disabled={done} icon={<Icon name="check" size={13} color="#fff" />}>
-        {done ? ui('market.met') : busy ? ui('market.saving') : ui('market.we_met')}
-      </Button>
-    </div>
+      ) : null}
+
+      {error ? <div style={{ marginTop: 10 }}><ErrorNote>{error}</ErrorNote></div> : null}
+
+      <div style={{ marginTop: 12 }}>
+        <Button tone="green" size="sm" onClick={markMet} loading={busy} disabled={done}>
+          {done ? ui('market.met') : busy ? ui('market.saving') : ui('market.we_met')}
+        </Button>
+      </div>
+    </Panel>
   );
 }
 
+/* ---------------------------------------------------------------- modals */
+
 function InterestModal({
-  listing,
-  viewerProfileId,
-  lang,
-  onClose,
-  onDone,
+  listing, viewerProfileId, lang, onClose, onDone,
 }: {
   listing: ListingWithCreator;
   viewerProfileId: string | null;
@@ -297,7 +323,7 @@ function InterestModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const { ui } = useI18n();
+  const { t, ui } = useI18n();
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -339,48 +365,34 @@ function InterestModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40" />
-      <div
-        className="relative w-full max-w-[430px] bg-white rounded-t-[18px] p-[22px] animate-sheet"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze">{ui('market.express_interest')}</h3>
-          <button type="button" onClick={onClose} className="w-7 h-7 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer">
-            <Icon name="x" size={14} color="var(--color-ink)" />
-          </button>
-        </div>
-        <label className="block mb-4">
-          <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">
-            {ui('market.message_optional')}
-          </span>
-          <textarea
-            value={msg}
-            onChange={(e) => setMsg(e.target.value)}
-            placeholder={ui('market.why_interested')}
-            rows={3}
-            className="parch-input"
-          />
-        </label>
-        {error && (
-          <div className="mb-3 flex items-center gap-[7px] font-serif text-xs text-red">
-            <Icon name="x" size={14} color="var(--color-red)" />{error}
-          </div>
-        )}
-        <Button tone="bronze" onClick={send} loading={busy} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
+    <Sheet
+      title={ui('market.express_interest')} cn="表达兴趣" onClose={onClose}
+      footer={
+        <Button tone="primary" size="lg" block onClick={send} loading={busy}>
           {busy ? ui('market.sending') : ui('market.send_interest')}
         </Button>
-      </div>
-    </div>
+      }
+    >
+      <Panel pad={11} innerRule={false}>
+        <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>{t(listing.title)}</div>
+        <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 3 }}>
+          {listing.creator?.full_name ?? ui('common.unknown_member')}
+        </div>
+      </Panel>
+
+      <label style={{ display: 'block' }}>
+        <div style={{ marginBottom: 6 }}><Bi en={ui('market.message_optional')} zh="留言（可选）" color="var(--color-gold)" /></div>
+        <textarea className="rof-input" rows={4} value={msg} onChange={(e) => setMsg(e.target.value)}
+          placeholder={ui('market.why_interested')} />
+      </label>
+
+      {error ? <ErrorNote>{error}</ErrorNote> : null}
+    </Sheet>
   );
 }
 
 function PublishModal({
-  viewerProfileId,
-  lang,
-  onClose,
-  onDone,
+  viewerProfileId, lang, onClose, onDone,
 }: {
   viewerProfileId: string | null;
   lang: Language;
@@ -419,50 +431,41 @@ function PublishModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40" />
-      <div
-        className="relative w-full max-w-[430px] bg-white rounded-t-[18px] p-[22px] animate-sheet max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze">{ui('market.new_listing')}</h3>
-          <button type="button" onClick={onClose} className="w-7 h-7 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer">
-            <Icon name="x" size={14} color="var(--color-ink)" />
-          </button>
-        </div>
-
-        <Segmented
-          className="mb-4"
-          items={[
-            { id: 'wanted', label: ui('market.wanted') },
-            { id: 'offer', label: ui('market.offers') },
-          ]}
-          value={type}
-          onChange={(id) => setType(id as 'wanted' | 'offer')}
-        />
-
-        <label className="block mb-3">
-          <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{ui('market.listing_title')}</span>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={ui('market.title_placeholder')} className="parch-input" />
-        </label>
-        <label className="block mb-4">
-          <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{ui('market.description')}</span>
-          <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={ui('market.desc_placeholder')} rows={4} className="parch-input" />
-        </label>
-
-        {error && (
-          <div className="mb-3 flex items-center gap-[7px] font-serif text-xs text-red">
-            <Icon name="x" size={14} color="var(--color-red)" />{error}
-          </div>
-        )}
-        <Button tone="ink" onClick={publish} loading={busy} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
+    <Sheet
+      title={ui('market.new_listing')} cn="新条目" onClose={onClose}
+      footer={
+        <Button tone="dark" size="lg" block onClick={publish} loading={busy}>
           {busy ? ui('market.publishing') : ui('market.publish')}
         </Button>
-      </div>
-    </div>
+      }
+    >
+      <Tabs
+        items={[
+          { id: 'wanted', label: ui('market.wanted') },
+          { id: 'offer', label: ui('market.offers') },
+        ]}
+        value={type}
+        onChange={(id) => setType(id as 'wanted' | 'offer')}
+      />
+
+      <label style={{ display: 'block' }}>
+        <div style={{ marginBottom: 6 }}><Bi en={ui('market.listing_title')} zh="标题" color="var(--color-gold)" /></div>
+        <input className="rof-input" type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+          placeholder={ui('market.title_placeholder')} />
+      </label>
+
+      <label style={{ display: 'block' }}>
+        <div style={{ marginBottom: 6 }}><Bi en={ui('market.description')} zh="描述" color="var(--color-gold)" /></div>
+        <textarea className="rof-input" rows={4} value={desc} onChange={(e) => setDesc(e.target.value)}
+          placeholder={ui('market.desc_placeholder')} />
+      </label>
+
+      {error ? <ErrorNote>{error}</ErrorNote> : null}
+    </Sheet>
   );
 }
+
+/* ------------------------------------------------------------------ page */
 
 export default function MarketPage() {
   const { lang, ui } = useI18n();
@@ -506,12 +509,6 @@ export default function MarketPage() {
   );
 
   /**
-   * Accepting is three writes with no transaction available over PostgREST, so
-   * the match row goes first: if it fails nothing has changed and a retry is
-   * clean. The insert is guarded against an existing open match so a retry
-   * after a partial failure can't produce a duplicate pairing.
-   */
-  /**
    * One call each — accept_interest and decline_interest run every write
    * inside a single database transaction. The listing row is locked there, so
    * two owners accepting at once queue instead of racing, and a failure part
@@ -546,159 +543,88 @@ export default function MarketPage() {
     }
   };
 
-  if (loading) return <Loading />;
+  if (loading) {
+    return <div className="grid place-items-center" style={{ minHeight: '50vh' }}><PixelSpinner size={20} color="var(--color-gold)" /></div>;
+  }
   if (loadError) return <LoadError message={loadError} onRetry={() => window.location.reload()} />;
 
+  const listFor = (rows: ListingWithCreator[], empty: string, emptyCn: string) =>
+    rows.length === 0 ? <EmptyState title={empty} cn={emptyCn} /> : (
+      <div style={{ display: 'grid', gap: 11 }}>
+        {rows.map((l) => (
+          <MarketCard key={l.id} listing={l} viewerProfileId={viewerProfileId} busyKey={busyKey}
+            onInterest={() => setInterestFor(l)} onAccept={acceptInterest} onReject={rejectInterest} />
+        ))}
+      </div>
+    );
+
   return (
-    <div className="px-[18px] pt-[22px]">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze">{ui('market.title')}</h1>
-        <button
-          type="button"
-          onClick={() => setShowPublish(true)}
-          className="flex items-center gap-[5px] py-[6px] px-3 rounded-full bg-transparent border border-line cursor-pointer"
-        >
-          <Icon name="plus" size={13} color="var(--color-bronze)" />
-          <span className="font-display font-bold text-eyebrow tracking-[0.10em] uppercase text-bronze">{ui('market.new')}</span>
-        </button>
+    <Page>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <Bi en="The Exchange" zh="交易所" color="var(--color-gold)" />
+        <Button tone="gold" size="sm" onClick={() => setShowPublish(true)}>+ {ui('market.new')}</Button>
       </div>
 
-      {error && (
-        <div className="mb-3 flex items-center gap-[7px] font-serif text-xs text-red">
-          <Icon name="x" size={14} color="var(--color-red)" />{error}
-        </div>
-      )}
+      {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-      <Segmented
-        className="mb-4"
+      <Tabs
         items={[
           { id: 'wanted', label: ui('market.wanted') },
           { id: 'offer', label: ui('market.offers') },
-          { id: 'mine', label: awaitingReply > 0 ? `${ui('market.mine')} (${awaitingReply})` : ui('market.mine') },
+          { id: 'mine', label: ui('market.mine'), badge: awaitingReply || undefined },
           { id: 'matches', label: ui('market.matches') },
         ]}
         value={tab}
         onChange={setTab}
       />
 
-      {tab === 'wanted' && (
-        <div>
-          {wanted.length === 0 && <EmptyState text={ui('market.no_wanted')} />}
-          {wanted.map((l) => (
-            <MarketCard
-              key={l.id}
-              listing={l}
-              viewerProfileId={viewerProfileId}
-              busyKey={busyKey}
-              onInterest={() => setInterestFor(l)}
-              onAccept={acceptInterest}
-              onReject={rejectInterest}
-            />
-          ))}
-        </div>
-      )}
-
-      {tab === 'offer' && (
-        <div>
-          {offers.length === 0 && <EmptyState text={ui('market.no_offers')} />}
-          {offers.map((l) => (
-            <MarketCard
-              key={l.id}
-              listing={l}
-              viewerProfileId={viewerProfileId}
-              busyKey={busyKey}
-              onInterest={() => setInterestFor(l)}
-              onAccept={acceptInterest}
-              onReject={rejectInterest}
-            />
-          ))}
-        </div>
-      )}
+      {tab === 'wanted' && listFor(wanted, ui('market.no_wanted'), '还没有需求')}
+      {tab === 'offer' && listFor(offers, ui('market.no_offers'), '还没有供给')}
 
       {tab === 'mine' && (
-        <div>
-          <div className="flex items-baseline justify-between mb-[10px]">
-            <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze">
-              {ui('market.received')}
-            </span>
-            {awaitingReply > 0 && (
-              <span className="font-serif text-xs text-red">
-                {awaitingReply} {ui('market.awaiting_you')}
-              </span>
-            )}
-          </div>
-          {myListings.length === 0 ? (
-            <div className="font-serif text-sm text-muted mb-6">{ui('market.nothing_posted')}</div>
-          ) : (
-            myListings.map((l) => (
-              <MarketCard
-                key={l.id}
-                listing={l}
-                viewerProfileId={viewerProfileId}
-                busyKey={busyKey}
-                onInterest={() => setInterestFor(l)}
-                onAccept={acceptInterest}
-                onReject={rejectInterest}
-              />
-            ))
-          )}
+        <div style={{ display: 'grid', gap: 18 }}>
+          <section>
+            <SectionHeader cn="收到的" className="mb-3" trailing={
+              awaitingReply > 0
+                ? <span className="rof-label" style={{ color: 'var(--color-red)' }}>{awaitingReply} {ui('market.awaiting_you')}</span>
+                : undefined
+            }>{ui('market.received')}</SectionHeader>
+            {myListings.length === 0
+              ? <EmptyState title={ui('market.nothing_posted')} cn="你还没有发布任何条目" />
+              : listFor(myListings, ui('market.nothing_posted'), '你还没有发布任何条目')}
+          </section>
 
-          <div className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mt-6 mb-[10px]">
-            {ui('market.sent')}
-          </div>
-          {mySent.length === 0 ? (
-            <div className="font-serif text-sm text-muted pb-6">{ui('market.nothing_sent')}</div>
-          ) : (
-            <div className="flex flex-col gap-[8px] pb-6">
-              {mySent.map((l) => <SentRow key={l.id} listing={l} />)}
-            </div>
-          )}
+          <section>
+            <SectionHeader cn="已发出" className="mb-3">{ui('market.sent')}</SectionHeader>
+            {mySent.length === 0 ? (
+              <EmptyState title={ui('market.nothing_sent')} cn="你还没有表达过兴趣" />
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {mySent.map((l) => <SentRow key={l.id} listing={l} />)}
+              </div>
+            )}
+          </section>
         </div>
       )}
 
       {tab === 'matches' && (
-        <div>
-          {liveMatches.length === 0 && <EmptyState text={ui('market.no_matches')} />}
-          {liveMatches.map((m) => (
-            <MatchCard key={m.id} match={m} onDone={() => {}} />
-          ))}
-        </div>
+        liveMatches.length === 0
+          ? <EmptyState title={ui('market.no_matches')} cn="还没有配对" />
+          : (
+            <div style={{ display: 'grid', gap: 11 }}>
+              {liveMatches.map((m) => <MatchCard key={m.id} match={m} onDone={() => {}} />)}
+            </div>
+          )
       )}
 
       {interestFor && (
-        <InterestModal
-          listing={interestFor}
-          viewerProfileId={viewerProfileId}
-          lang={lang}
-          onClose={() => setInterestFor(null)}
-          onDone={() => {}}
-        />
+        <InterestModal listing={interestFor} viewerProfileId={viewerProfileId} lang={lang}
+          onClose={() => setInterestFor(null)} onDone={() => {}} />
       )}
       {showPublish && (
-        <PublishModal
-          viewerProfileId={viewerProfileId}
-          lang={lang}
-          onClose={() => setShowPublish(false)}
-          onDone={() => {}}
-        />
+        <PublishModal viewerProfileId={viewerProfileId} lang={lang}
+          onClose={() => setShowPublish(false)} onDone={() => {}} />
       )}
-    </div>
-  );
-}
-
-function Loading() {
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="text-center py-10">
-      <Icon name="search" size={28} color="var(--color-faint)" className="mx-auto mb-3" />
-      <div className="font-serif text-sm text-muted">{text}</div>
-    </div>
+    </Page>
   );
 }

@@ -2,28 +2,68 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Badge, Button, Chip, Spinner, LoadError, Segmented } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
 import { useCuratorView } from '@/lib/data/views';
 import { useCuratorSuggest, useCuratorUpdateMember, useDismatch } from '@/lib/data/mutations';
-import { createClient } from '@/lib/supabase/client';
 import { CLASSES, type ClassName } from '@/lib/classes';
+import { LoadError } from '@/components/ui';
+import { Page } from '@/components/pixel/shell';
+import {
+  Avatar, Bi, Button, ErrorNote, Field, Panel,
+  PixelSpinner, Sheet, StatusChip,
+} from '@/components/pixel';
 import type { MatchWithParties } from '@/types';
 
-function StatBlock({ value, label }: { value: number; label: string }) {
+/** One figure on the navy overview slab. */
+function StatBlock({ value, label, cn }: { value: number; label: string; cn: string }) {
   return (
     <div className="text-center">
-      <div className="font-display font-bold text-2xl" style={{ color: 'var(--color-dark-paper)' }}>{value}</div>
-      <div className="font-serif text-eyebrow" style={{ color: 'var(--color-dark-muted)' }}>{label}</div>
+      <div style={{
+        fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
+        color: 'var(--color-gold)', lineHeight: 1,
+      }}>{value}</div>
+      <div className="rof-label" style={{ color: 'rgba(245,237,216,0.7)', marginTop: 5 }}>{label}</div>
+      <div className="rof-cjk" style={{ fontSize: 'var(--text-small)', color: 'rgba(245,237,216,0.5)', lineHeight: 1.3 }}>{cn}</div>
     </div>
   );
 }
 
+/** Result of a curator action. Green for done, red for refused. */
 function Notice({ tone, children }: { tone: 'ok' | 'err'; children: React.ReactNode }) {
+  if (tone === 'err') return <div style={{ marginTop: 12 }}><ErrorNote>{children}</ErrorNote></div>;
   return (
-    <div className={`mt-3 flex items-center gap-[7px] font-serif text-xs ${tone === 'ok' ? 'text-green' : 'text-red'}`}>
-      <Icon name={tone === 'ok' ? 'check' : 'x'} size={14} color={tone === 'ok' ? 'var(--color-green)' : 'var(--color-red)'} />
-      {children}
+    <div className="rof-label" style={{
+      marginTop: 12, display: 'flex', alignItems: 'center', gap: 7, padding: '7px 9px',
+      background: 'var(--color-sage-tint)', border: '2px solid var(--color-sage)',
+      color: '#3F5742', textTransform: 'none', letterSpacing: 0,
+    }}>
+      <span aria-hidden style={{ flex: 'none', fontFamily: 'var(--font-display)', fontWeight: 700 }}>Y</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+/** The desk's own tab strip — five tabs, so it scrolls sideways rather than crushing. */
+function DeskTabs({
+  items, value, onChange,
+}: { items: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <div className="no-scrollbar" style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', border: '2px solid var(--color-navy-900)', boxShadow: 'var(--shadow-px)', minWidth: 'max-content' }}>
+        {items.map((it) => {
+          const on = value === it.id;
+          return (
+            <button key={it.id} type="button" onClick={() => onChange(it.id)}
+              className="rof-label"
+              style={{
+                padding: '9px 12px', border: 'none', borderRadius: 0, cursor: 'pointer',
+                lineHeight: 1, whiteSpace: 'nowrap',
+                background: on ? 'var(--color-navy-900)' : 'transparent',
+                color: on ? 'var(--color-gold)' : 'var(--color-muted)',
+              }}>{it.label}</button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -61,8 +101,8 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
+      <div className="grid place-items-center" style={{ minHeight: '50vh' }}>
+        <PixelSpinner size={20} color="var(--color-gold)" />
       </div>
     );
   }
@@ -180,271 +220,242 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="pb-6">
-      {/* Back header */}
-      <div className="flex items-center gap-3 px-[18px] pt-[16px] pb-[10px]">
-        <button type="button" onClick={() => router.back()} className="w-8 h-8 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer">
-          <Icon name="chevron-right" size={16} color="var(--color-ink)" style={{ transform: 'rotate(180deg)' }} />
-        </button>
-        <span className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze">{ui('admin.title')}</span>
-      </div>
-
-      {/* Dark header with stats */}
-      <div className="sheet-dark mx-[18px] p-[18px] mb-5">
-        <div className="flex items-center gap-[6px] mb-4">
-          <Icon name="shield" size={16} color="var(--color-dark-muted)" />
-          <span className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase" style={{ color: 'var(--color-dark-muted)' }}>
-            {ui('admin.overview')}
-          </span>
+    <Page>
+      {/* the overview slab */}
+      <Panel pad={15} tone="navy" corners>
+        <Bi en={ui('admin.overview')} zh="总览" color="var(--color-gold)" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 14 }}>
+          <StatBlock value={activeCount} label={ui('admin.profiles')} cn="成员" />
+          <StatBlock value={wantedCount} label={ui('admin.wanted')} cn="需求" />
+          <StatBlock value={offerCount} label={ui('admin.offers')} cn="供给" />
+          <StatBlock value={matches.length} label={ui('admin.matches')} cn="配对" />
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          <StatBlock value={activeCount} label={ui('admin.profiles')} />
-          <StatBlock value={wantedCount} label={ui('admin.wanted')} />
-          <StatBlock value={offerCount} label={ui('admin.offers')} />
-          <StatBlock value={matches.length} label={ui('admin.matches')} />
-        </div>
-      </div>
+      </Panel>
 
-      <div className="px-[18px]">
-        <Segmented
-          tone="dark"
-          items={[
-            { id: 'people', label: ui('admin.people') },
-            { id: 'listings', label: ui('admin.listings') },
-            { id: 'matches', label: ui('admin.matches') },
-            { id: 'suggest', label: ui('admin.suggest') },
-            { id: 'invite', label: ui('admin.invite') },
-          ]}
-          value={tab}
-          onChange={setTab}
-        />
+      <DeskTabs
+        items={[
+          { id: 'people', label: ui('admin.people') },
+          { id: 'listings', label: ui('admin.listings') },
+          { id: 'matches', label: ui('admin.matches') },
+          { id: 'suggest', label: ui('admin.suggest') },
+          { id: 'invite', label: ui('admin.invite') },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
-        {/* People tab */}
-        {tab === 'people' && (
-          <div className="mt-4 flex flex-col gap-[8px]">
-            {profiles.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 p-[10px] rounded-xs border border-line">
-                <Avatar initials={p.initials} id={p.id} size={34} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-serif font-semibold text-sm text-ink truncate">{p.full_name}</div>
+      {/* people */}
+      {tab === 'people' && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {profiles.map((p) => (
+            <Panel key={p.id} pad={10} innerRule={false} style={{ opacity: p.is_active ? 1 : 0.55 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Avatar initials={p.initials} id={p.id} size={34} featured={p.is_featured} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="truncate" style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>{p.full_name}</div>
                   <select
                     value={CLASSES.includes(p.class_name as ClassName) ? p.class_name : ''}
                     disabled={busyKey !== null}
                     onChange={(e) => patchProfile(p.id, { class_name: e.target.value }, `${p.id}:class`)}
-                    className="font-serif text-eyebrow text-faint bg-transparent border-none cursor-pointer p-0 -ml-[2px]"
+                    className="rof-label"
+                    style={{
+                      marginTop: 4, padding: '3px 5px', background: 'var(--color-white)',
+                      border: '2px solid var(--color-line)', borderRadius: 0,
+                      color: 'var(--color-muted)', cursor: busyKey !== null ? 'not-allowed' : 'pointer',
+                    }}
                   >
                     {!CLASSES.includes(p.class_name as ClassName) && (
                       <option value="">{p.class_name || ui('admin.unassigned')}</option>
                     )}
-                    {CLASSES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
+                    {CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    title={p.is_featured ? ui('admin.unfeature') : ui('admin.feature')}
-                    disabled={busyKey !== null}
+                <div style={{ display: 'flex', gap: 5, flex: 'none' }}>
+                  {/* Filled star vs hollow — the two states have to differ in
+                      shape, not only colour, to read at this size. */}
+                  <Button
+                    tone={p.is_featured ? 'gold' : 'secondary'}
+                    size="sm"
+                    disabled={busyKey !== null && busyKey !== `${p.id}:feat`}
+                    loading={busyKey === `${p.id}:feat`}
                     onClick={() => patchProfile(p.id, { is_featured: !p.is_featured }, `${p.id}:feat`)}
-                    className="w-7 h-7 grid place-items-center rounded-full cursor-pointer"
-                    style={{
-                      background: p.is_featured ? 'var(--color-bronze-wash)' : 'transparent',
-                      border: `1px solid ${p.is_featured ? 'var(--color-bronze)' : 'var(--color-line)'}`,
-                    }}
-                  >
-                    {/* Filled vs hollow — bronze and faint are too close in
-                        brightness to read as an on/off state on their own. */}
-                    {busyKey === `${p.id}:feat` ? (
-                      <Spinner size={12} color="var(--color-bronze)" />
-                    ) : (
-                      <Icon
-                        name="star"
-                        size={13}
-                        color={p.is_featured ? 'var(--color-bronze)' : 'var(--color-faint)'}
-                        fill={p.is_featured ? 'var(--color-bronze)' : 'none'}
-                      />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    title={p.is_active ? ui('admin.deactivate') : ui('admin.activate')}
-                    disabled={busyKey !== null}
+                  >{p.is_featured ? '★' : '☆'}</Button>
+                  <Button
+                    tone={p.is_active ? 'green' : 'secondary'}
+                    size="sm"
+                    disabled={busyKey !== null && busyKey !== `${p.id}:active`}
+                    loading={busyKey === `${p.id}:active`}
                     onClick={() =>
                       p.is_active
                         ? setConfirmOff({ id: p.id, name: p.full_name })
                         : patchProfile(p.id, { is_active: true }, `${p.id}:active`)
                     }
-                    className="w-7 h-7 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer"
-                  >
-                    {busyKey === `${p.id}:active` ? (
-                      <Spinner size={12} color="var(--color-green)" />
-                    ) : (
-                      <span className="w-2 h-2 rounded-full" style={{ background: p.is_active ? 'var(--color-green)' : 'var(--color-faint)' }} />
-                    )}
-                  </button>
+                  >{p.is_active ? 'ON' : 'OFF'}</Button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </Panel>
+          ))}
+        </div>
+      )}
 
-        {/* Listings tab */}
-        {tab === 'listings' && (
-          <div className="mt-4 flex flex-col gap-[8px]">
-            {listings.length === 0 && (
-              <div className="font-serif text-sm text-muted text-center py-8">{ui('admin.no_listings')}</div>
-            )}
-            {listings.map((l) => (
-              <div key={l.id} className="flex items-center gap-3 p-[10px] rounded-xs border border-line">
+      {/* listings */}
+      {tab === 'listings' && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {listings.length === 0 && (
+            <div className="text-center" style={{ padding: '24px 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)' }}>
+              {ui('admin.no_listings')}
+            </div>
+          )}
+          {listings.map((l) => (
+            <Panel key={l.id} pad={10} innerRule={false}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Avatar initials={l.creator?.initials ?? '?'} id={l.creator_profile_id} size={30} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-[2px]">
-                    <Chip variant="wash" tone={l.type === 'wanted' ? 'red' : 'green'}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    <StatusChip tone={l.type === 'wanted' ? 'wanted' : 'offer'}>
                       {l.type === 'wanted' ? ui('market.wanted') : ui('market.offer_one')}
-                    </Chip>
-                    <Badge tone={l.status === 'open' ? 'green' : 'neutral'}>{l.status}</Badge>
+                    </StatusChip>
+                    <StatusChip tone={l.status === 'open' ? 'open' : 'matched'}>{l.status}</StatusChip>
                   </div>
-                  <div className="font-serif text-xs text-ink truncate">{t(l.title)}</div>
+                  <div className="truncate" style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)', marginTop: 5 }}>{t(l.title)}</div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </Panel>
+          ))}
+        </div>
+      )}
 
-        {/* Matches tab */}
-        {tab === 'matches' && (
-          <div className="mt-4">
-            <p className="font-serif text-sm text-muted leading-[1.6] mb-4">{ui('admin.matches_desc')}</p>
-            {matches.length === 0 && (
-              <div className="font-serif text-sm text-muted text-center py-8">{ui('admin.no_matches')}</div>
-            )}
-            <div className="flex flex-col gap-[8px]">
-              {matches.map((m) => {
-                const closed = m.status === 'closed';
-                return (
-                  <div key={m.id} className="flex items-center gap-3 p-[10px] rounded-xs border border-line" style={{ opacity: closed ? 0.55 : 1 }}>
+      {/* matches */}
+      {tab === 'matches' && (
+        <div>
+          <p style={{ margin: '0 0 13px', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
+            {ui('admin.matches_desc')}
+          </p>
+          {matches.length === 0 && (
+            <div className="text-center" style={{ padding: '24px 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)' }}>
+              {ui('admin.no_matches')}
+            </div>
+          )}
+          <div style={{ display: 'grid', gap: 8 }}>
+            {matches.map((m) => {
+              const closed = m.status === 'closed';
+              return (
+                <Panel key={m.id} pad={10} innerRule={false} style={{ opacity: closed ? 0.55 : 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Avatar initials={m.initiator?.initials ?? '?'} id={m.initiator_profile_id} size={28} />
                     <Avatar initials={m.matched?.initials ?? '?'} id={m.matched_profile_id} size={28} />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-serif font-semibold text-xs text-ink truncate">
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="truncate" style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>
                         {m.initiator?.full_name ?? ui('common.unknown_member')} &amp; {m.matched?.full_name ?? ui('common.unknown_member')}
                       </div>
-                      <div className="font-serif text-xs text-faint truncate">{t(m.listing?.title)}</div>
+                      <div className="truncate" style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 2 }}>
+                        {t(m.listing?.title)}
+                      </div>
                     </div>
                     {closed ? (
-                      <Chip variant="wash" tone="neutral">{ui('admin.match_closed')}</Chip>
+                      <StatusChip tone="closed">{ui('admin.match_closed')}</StatusChip>
                     ) : (
-                      <Button tone="red" variant="outline" size="sm" block={false} loading={busyKey === `${m.id}:dismatch`} disabled={busyKey !== null} onClick={() => dismatch(m)}>
+                      <Button tone="red" size="sm"
+                        loading={busyKey === `${m.id}:dismatch`}
+                        disabled={busyKey !== null && busyKey !== `${m.id}:dismatch`}
+                        onClick={() => dismatch(m)}>
                         {busyKey === `${m.id}:dismatch` ? ui('admin.dismatching') : ui('admin.dismatch')}
                       </Button>
                     )}
                   </div>
-                );
-              })}
-            </div>
-            {matchState && <Notice tone={matchState.tone}>{matchState.msg}</Notice>}
+                </Panel>
+              );
+            })}
           </div>
-        )}
+          {matchState && <Notice tone={matchState.tone}>{matchState.msg}</Notice>}
+        </div>
+      )}
 
-        {/* Suggest tab */}
-        {tab === 'suggest' && (
-          <div className="mt-4">
-            <p className="font-serif text-sm text-muted leading-[1.6] mb-4">
-              {ui('admin.suggest_desc')}
-            </p>
-            <label className="block mb-3">
-              <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{ui('admin.wanted_listing')}</span>
-              <select value={suggestListing} onChange={(e) => setSuggestListing(e.target.value)} className="parch-input">
+      {/* suggest */}
+      {tab === 'suggest' && (
+        <div>
+          <p style={{ margin: '0 0 13px', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
+            {ui('admin.suggest_desc')}
+          </p>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <Field label={ui('admin.wanted_listing')} cn="需求条目">
+              <select className="rof-input" value={suggestListing} onChange={(e) => setSuggestListing(e.target.value)}>
                 <option value="">{ui('admin.select_listing')}</option>
                 {listings.filter((l) => l.type === 'wanted').map((l) => (
                   <option key={l.id} value={l.id}>{t(l.title)}</option>
                 ))}
               </select>
-            </label>
-            <label className="block mb-3">
-              <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{ui('admin.suggest_classmate')}</span>
-              <select value={suggestPerson} onChange={(e) => setSuggestPerson(e.target.value)} className="parch-input">
+            </Field>
+            <Field label={ui('admin.suggest_classmate')} cn="推荐同学">
+              <select className="rof-input" value={suggestPerson} onChange={(e) => setSuggestPerson(e.target.value)}>
                 <option value="">{ui('admin.select_person')}</option>
-                {profiles.map((p) => (
-                  <option key={p.id} value={p.id}>{p.full_name}</option>
-                ))}
+                {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
               </select>
-            </label>
-            <label className="block mb-4">
-              <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{ui('admin.why_person')}</span>
-              <textarea
-                value={suggestReason}
-                onChange={(e) => setSuggestReason(e.target.value)}
-                placeholder={ui('admin.brief_reason')}
-                rows={2}
-                className="parch-input"
-              />
-            </label>
-            <Button tone="bronze" onClick={sendSuggestion} loading={busyKey === 'suggest'} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
+            </Field>
+            <Field label={ui('admin.why_person')} cn="理由">
+              <textarea className="rof-input" rows={3} value={suggestReason}
+                onChange={(e) => setSuggestReason(e.target.value)} placeholder={ui('admin.brief_reason')} />
+            </Field>
+            <Button tone="gold" size="lg" block onClick={sendSuggestion}
+              loading={busyKey === 'suggest'} disabled={busyKey === 'suggest'}>
               {busyKey === 'suggest' ? ui('common.sending') : ui('admin.send_suggestion')}
             </Button>
-            {suggestState && <Notice tone={suggestState.tone}>{suggestState.msg}</Notice>}
           </div>
-        )}
-
-        {/* Invite tab */}
-        {tab === 'invite' && (
-          <div className="mt-4">
-            <p className="font-serif text-sm text-muted leading-[1.6] mb-4">
-              {ui('admin.invite_desc')}
-            </p>
-            <label className="block mb-3">
-              <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{ui('auth.email')}</span>
-              <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="classmate@school.edu" className="parch-input" />
-            </label>
-            <label className="block mb-4">
-              <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{ui('admin.role_context')}</span>
-              <input type="text" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} placeholder={ui('admin.role_placeholder')} className="parch-input" />
-            </label>
-            <Button tone="ink" onClick={sendInvite} loading={busyKey === 'invite'} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
-              {busyKey === 'invite' ? ui('common.sending') : ui('admin.send_invitation')}
-            </Button>
-            {inviteState && <Notice tone={inviteState.tone}>{inviteState.msg}</Notice>}
-          </div>
-        )}
-      </div>
-
-      {confirmOff && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={() => setConfirmOff(null)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="relative w-full max-w-[430px] bg-white rounded-t-[18px] p-[22px] animate-sheet"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze mb-3">
-              {ui('admin.confirm_deactivate')}
-            </h3>
-            <div className="flex items-center gap-3 mb-3">
-              <Avatar initials={profiles.find((x) => x.id === confirmOff.id)?.initials ?? '?'} id={confirmOff.id} size={34} />
-              <span className="font-serif font-semibold text-base text-ink">{confirmOff.name}</span>
-            </div>
-            <p className="font-serif text-sm text-muted leading-[1.6] mb-4">
-              {ui('admin.confirm_deactivate_body')}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                tone="red"
-                onClick={() => {
-                  const target = confirmOff;
-                  setConfirmOff(null);
-                  patchProfile(target.id, { is_active: false }, `${target.id}:active`);
-                }}
-              >
-                {ui('admin.deactivate')}
-              </Button>
-              <Button tone="ink" variant="outline" onClick={() => setConfirmOff(null)}>
-                {ui('profile.cancel')}
-              </Button>
-            </div>
-          </div>
+          {suggestState && <Notice tone={suggestState.tone}>{suggestState.msg}</Notice>}
         </div>
       )}
-    </div>
+
+      {/* invite */}
+      {tab === 'invite' && (
+        <div>
+          <p style={{ margin: '0 0 13px', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
+            {ui('admin.invite_desc')}
+          </p>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <Field label={ui('auth.email')} cn="邮箱">
+              <input className="rof-input" type="email" value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)} placeholder="classmate@school.edu" />
+            </Field>
+            <Field label={ui('admin.role_context')} cn="角色说明">
+              <input className="rof-input" type="text" value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)} placeholder={ui('admin.role_placeholder')} />
+            </Field>
+            <Button tone="dark" size="lg" block onClick={sendInvite}
+              loading={busyKey === 'invite'} disabled={busyKey === 'invite'}>
+              {busyKey === 'invite' ? ui('common.sending') : ui('admin.send_invitation')}
+            </Button>
+          </div>
+          {inviteState && <Notice tone={inviteState.tone}>{inviteState.msg}</Notice>}
+        </div>
+      )}
+
+      {confirmOff && (
+        <Sheet
+          title={ui('admin.confirm_deactivate')} cn="确认停用"
+          onClose={() => setConfirmOff(null)}
+          footer={
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button tone="red" size="lg" onClick={() => {
+                const target = confirmOff;
+                setConfirmOff(null);
+                patchProfile(target.id, { is_active: false }, `${target.id}:active`);
+              }}>{ui('admin.deactivate')}</Button>
+              <Button tone="secondary" size="lg" onClick={() => setConfirmOff(null)}>{ui('profile.cancel')}</Button>
+            </div>
+          }
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+            <Avatar initials={profiles.find((x) => x.id === confirmOff.id)?.initials ?? '?'} id={confirmOff.id} size={38} />
+            <span style={{
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+              letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase', color: 'var(--color-ink)',
+            }}>{confirmOff.name}</span>
+          </div>
+          <p style={{ margin: 0, fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
+            {ui('admin.confirm_deactivate_body')}
+          </p>
+        </Sheet>
+      )}
+    </Page>
   );
 }

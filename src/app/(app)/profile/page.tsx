@@ -2,34 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Chip, Button, Badge, LoadError } from '@/components/ui';
-import { CATEGORY_COLORS } from '@/lib/categories';
-import { CATEGORIES, LANGUAGES, t } from '@/lib/i18n/translations';
-import { LanguageSwitcher } from '@/components/ui/language-switcher';
+import { CATEGORIES, t } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
 import { useSignOut } from '@/lib/supabase/hooks';
 import { useViewerProfile } from '@/lib/data/views';
 import { useSaveProfile } from '@/lib/data/mutations';
-import { createClient } from '@/lib/supabase/client';
 import { CLASSES, DEFAULT_CLASS } from '@/lib/classes';
+import { LoadError } from '@/components/ui';
+import { Page } from '@/components/pixel/shell';
+import {
+  Avatar, Bi, Button, Divider, ErrorNote, Field, Panel,
+  PixelSpinner, SectionHeader, StatusChip,
+} from '@/components/pixel';
 import type { Language, CategoryId, Translatable } from '@/types';
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[8px]">
-      {children}
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block mb-3">
-      <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">{label}</span>
-      {children}
-    </label>
-  );
-}
 
 /**
  * Editing counterpart to i18n `t()`, and deliberately stricter: it must NOT
@@ -348,10 +333,10 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="grid place-items-center" style={{ minHeight: '50vh' }}>
         <div className="text-center">
-          <div className="w-8 h-8 mx-auto mb-3 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
-          <p className="font-serif text-sm text-muted">{ui('profile.loading')}</p>
+          <PixelSpinner size={20} color="var(--color-gold)" />
+          <div style={{ marginTop: 12 }}><Bi en={ui('profile.loading')} color="var(--color-muted)" /></div>
         </div>
       </div>
     );
@@ -359,245 +344,261 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] px-6">
-        <div className="text-center">
-          <p className="font-serif text-base text-ink mb-2">{ui('profile.not_found')}</p>
-          <p className="font-serif text-sm text-muted mb-4">{ui('profile.not_created')}</p>
-          <Button tone="ink" onClick={signOut}>{ui('auth.sign_out')}</Button>
-        </div>
-      </div>
+      <Page>
+        <Panel pad={16} corners>
+          <div className="text-center">
+            <Bi en={ui('profile.not_found')} zh="找不到档案" color="var(--color-red)" />
+            <p style={{ margin: '10px 0 14px', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
+              {ui('profile.not_created')}
+            </p>
+            <Button tone="dark" onClick={signOut}>{ui('auth.sign_out')}</Button>
+          </div>
+        </Panel>
+      </Page>
     );
   }
 
+  const addTopic = (
+    list: Draft[], set: (d: Draft[]) => void, value: string, clear: () => void,
+  ) => {
+    if (!value.trim()) return;
+    set([...list, { original: null, text: value.trim(), lang }]);
+    clear();
+  };
+
+  /** Removable topic tag. Gold for "ask me", sage for "I want". */
+  const Tag = ({ text, tone, onRemove }: { text: string; tone: 'gold' | 'sage'; onRemove: () => void }) => (
+    <span className="rof-label inline-flex items-center" style={{
+      gap: 6, padding: '4px 4px 4px 8px', textTransform: 'none', letterSpacing: 0,
+      background: tone === 'gold' ? 'var(--color-gold-tint)' : 'var(--color-sage-tint)',
+      border: `2px solid ${tone === 'gold' ? 'var(--color-gold)' : 'var(--color-sage)'}`,
+      color: tone === 'gold' ? '#6B5223' : '#3F5742',
+    }}>
+      {text}
+      <button type="button" onClick={onRemove} aria-label={`Remove ${text}`}
+        style={{
+          width: 16, height: 16, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
+          background: 'transparent', border: 'none', borderRadius: 0, padding: 0,
+          color: 'inherit', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-small)', lineHeight: 1,
+        }}>X</button>
+    </span>
+  );
+
   return (
-    <div className="px-[18px] pt-[22px] pb-[100px]">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze">{ui('profile.title')}</h1>
-        <LanguageSwitcher languages={LANGUAGES} value={lang} onChange={setLang} />
-      </div>
-
-      {/* Identity block */}
-      <div className="flex items-center gap-4 mb-5">
-        <Avatar initials={profile.initials || initialsOf(name)} id={profile.id} size={56} />
-        <div>
-          <div className="font-serif font-semibold text-lg text-ink">{name}</div>
-          <Badge>{className}</Badge>
+    <Page>
+      {/* who you are, as the Republic sees you */}
+      <Panel pad={14} corners>
+        <div className="flex items-center" style={{ gap: 13 }}>
+          <Avatar initials={profile.initials || initialsOf(name)} id={profile.id} size={56} featured={profile.is_featured} />
+          <div style={{ minWidth: 0 }}>
+            <Bi en={`Founder No. ${String(profile.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+            <div style={{
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+              letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
+              color: 'var(--color-ink)', marginTop: 5, lineHeight: 1.25,
+            }}>{name}</div>
+            <div style={{ marginTop: 6 }}><StatusChip tone="neutral">{className}</StatusChip></div>
+          </div>
         </div>
-      </div>
+      </Panel>
 
-      {/* Basic info */}
-      <SectionLabel>{ui('profile.identity')}</SectionLabel>
-      <Field label={ui('profile.full_name')}>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="parch-input" />
-      </Field>
-      <Field label={ui('profile.native_name')}>
-        <input type="text" value={nativeName} onChange={(e) => setNativeName(e.target.value)} placeholder={ui('profile.optional')} className="parch-input" />
-      </Field>
-      <Field label={ui('profile.class')}>
-        <select value={className} onChange={(e) => setClassName(e.target.value)} className="parch-input">
-          {CLASSES.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-      </Field>
-      <Field label={ui('profile.headline')}>
-        <input type="text" value={fields.headline} onChange={(e) => setField('headline', e.target.value)} placeholder={otherLang(profile.headline, lang)} className="parch-input" />
-      </Field>
-      <Field label={ui('profile.role')}>
-        <input type="text" value={fields.role} onChange={(e) => setField('role', e.target.value)} placeholder={otherLang(profile.role, lang)} className="parch-input" />
-      </Field>
+      {/* The single most confusing thing about this screen, said out loud. The
+          language toggle in the bar decides which translation the text fields
+          write to — not merely which language the labels are in. */}
+      <Panel pad={11} tone="gold" innerRule={false}>
+        <Bi en={`Editing in ${lang === 'zh' ? '中文' : 'English'}`} zh={lang === 'zh' ? '编辑中文版' : '编辑英文版'} color="var(--color-navy-900)" />
+        <p style={{ margin: '6px 0 0', fontSize: 'var(--text-small)', color: 'var(--color-ink-2)', lineHeight: 1.55 }}>
+          {lang === 'zh'
+            ? '切换顶部的 EN / 中 可以编辑另一种语言的版本。两种语言会一起保存。'
+            : 'Switch EN / 中 in the bar above to write the other language. Both are saved together.'}
+        </p>
+      </Panel>
 
-      {/* Introduction */}
-      <SectionLabel>{ui('profile.introduction')}</SectionLabel>
-      <Field label={ui('profile.personal_intro')}>
-        <textarea value={fields.intro} onChange={(e) => setField('intro', e.target.value)} rows={3} placeholder={otherLang(profile.intro, lang)} className="parch-input" />
-      </Field>
-      <Field label={ui('profile.professional')}>
-        <textarea value={fields.professional} onChange={(e) => setField('professional', e.target.value)} rows={2} placeholder={otherLang(profile.professional, lang)} className="parch-input" />
-      </Field>
-
-      {/* Hidden Worlds */}
-      <div className="mt-2">
-        <div className="flex items-center justify-between mb-[8px]">
-          <SectionLabel>{ui('profile.hidden_worlds')}</SectionLabel>
-          <button
-            type="button"
-            onClick={() => setShowAddWorld(true)}
-            className="flex items-center gap-[4px] border-none bg-transparent cursor-pointer font-serif text-xs text-bronze"
-          >
-            <Icon name="plus" size={13} color="var(--color-bronze)" /> {ui('profile.add')}
-          </button>
+      {/* identity */}
+      <section>
+        <SectionHeader cn="身份" className="mb-3">{ui('profile.identity')}</SectionHeader>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Field label={ui('profile.full_name')} cn="姓名">
+            <input className="rof-input" type="text" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label={ui('profile.native_name')} cn="本名">
+            <input className="rof-input" type="text" value={nativeName} onChange={(e) => setNativeName(e.target.value)} placeholder={ui('profile.optional')} />
+          </Field>
+          <Field label={ui('profile.class')} cn="班级">
+            <select className="rof-input" value={className} onChange={(e) => setClassName(e.target.value)}>
+              {CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label={ui('profile.headline')} cn="一句话">
+            <input className="rof-input" type="text" value={fields.headline} onChange={(e) => setField('headline', e.target.value)} placeholder={otherLang(profile.headline, lang)} />
+          </Field>
+          <Field label={ui('profile.role')} cn="角色">
+            <input className="rof-input" type="text" value={fields.role} onChange={(e) => setField('role', e.target.value)} placeholder={otherLang(profile.role, lang)} />
+          </Field>
         </div>
-        <div className="flex flex-col gap-[8px]">
+      </section>
+
+      {/* introduction */}
+      <section>
+        <SectionHeader cn="介绍" className="mb-3">{ui('profile.introduction')}</SectionHeader>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Field label={ui('profile.personal_intro')} cn="个人介绍">
+            <textarea className="rof-input" rows={3} value={fields.intro} onChange={(e) => setField('intro', e.target.value)} placeholder={otherLang(profile.intro, lang)} />
+          </Field>
+          <Field label={ui('profile.professional')} cn="职业背景">
+            <textarea className="rof-input" rows={2} value={fields.professional} onChange={(e) => setField('professional', e.target.value)} placeholder={otherLang(profile.professional, lang)} />
+          </Field>
+        </div>
+      </section>
+
+      {/* hidden worlds */}
+      <section>
+        <SectionHeader cn="隐藏世界" className="mb-3" trailing={
+          <Button tone="gold" size="sm" onClick={() => setShowAddWorld(true)}>+ {ui('profile.add')}</Button>
+        }>{ui('profile.hidden_worlds')}</SectionHeader>
+
+        <div style={{ display: 'grid', gap: 8 }}>
           {worlds.map((w) => {
-            const color = CATEGORY_COLORS[w.category] ?? '#8f7044';
             const cat = CATEGORIES.find((c) => c.id === w.category);
             return (
-              <div key={w.id} className="flex items-center gap-3 p-[10px] rounded-xs border border-line">
-                <div className="w-7 h-7 rounded-full grid place-items-center shrink-0" style={{ background: color, opacity: 0.85 }}>
-                  <Icon name="star" size={12} color="#fdf0e6" />
+              <div key={w.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: 9,
+                border: '2px solid var(--color-line)', background: 'var(--color-white)',
+              }}>
+                <span aria-hidden style={{
+                  width: 24, height: 24, flex: 'none', display: 'block',
+                  background: `var(--color-cat-${w.category})`, border: '2px solid var(--color-navy-900)',
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="truncate" style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>{w.name}</div>
+                  {cat ? <div style={{ marginTop: 2 }}><Bi en={cat.en} zh={cat.zh} color="var(--color-faint)" /></div> : null}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-serif text-sm text-ink truncate">{w.name}</div>
-                  <div className="font-serif text-eyebrow text-faint">{cat?.en ?? w.category}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeWorld(w.id)}
-                  className="w-6 h-6 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer shrink-0"
-                >
-                  <Icon name="x" size={12} color="var(--color-faint)" />
-                </button>
+                <button type="button" onClick={() => removeWorld(w.id)} aria-label={`Remove ${w.name}`}
+                  style={{
+                    width: 24, height: 24, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
+                    background: 'transparent', border: '2px solid var(--color-line)', borderRadius: 0,
+                    color: 'var(--color-faint)', fontFamily: 'var(--font-display)', fontWeight: 700,
+                    fontSize: 'var(--text-small)', lineHeight: 1,
+                  }}>X</button>
               </div>
             );
           })}
-        </div>
-        {showAddWorld && (
-          <div className="mt-3 p-3 rounded-xs border border-line">
-            <Field label={ui('profile.world_name')}>
-              <input type="text" value={newWorldName} onChange={(e) => setNewWorldName(e.target.value)} placeholder={ui('profile.world_placeholder')} className="parch-input" />
-            </Field>
-            <Field label={ui('profile.category')}>
-              <select value={newWorldCat} onChange={(e) => setNewWorldCat(e.target.value as CategoryId)} className="parch-input">
-                {CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>{lang === 'zh' ? c.zh : c.en}</option>
-                ))}
-              </select>
-            </Field>
-            <div className="flex gap-2">
-              <Button tone="bronze" size="sm" onClick={addWorld}>{ui('profile.add')}</Button>
-              <Button tone="ink" variant="outline" size="sm" onClick={() => setShowAddWorld(false)}>{ui('profile.cancel')}</Button>
+          {worlds.length === 0 && !showAddWorld ? (
+            <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-faint)' }}>
+              {lang === 'zh' ? '还没有隐藏世界。' : 'No hidden worlds yet.'}
             </div>
-          </div>
+          ) : null}
+        </div>
+
+        {showAddWorld && (
+          <Panel pad={12} className="mt-3" innerRule={false}>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <Field label={ui('profile.world_name')} cn="名称">
+                <input className="rof-input" type="text" value={newWorldName} onChange={(e) => setNewWorldName(e.target.value)} placeholder={ui('profile.world_placeholder')} />
+              </Field>
+              <Field label={ui('profile.category')} cn="类别">
+                <select className="rof-input" value={newWorldCat} onChange={(e) => setNewWorldCat(e.target.value as CategoryId)}>
+                  {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{lang === 'zh' ? c.zh : c.en}</option>)}
+                </select>
+              </Field>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button tone="primary" size="sm" onClick={addWorld}>{ui('profile.add')}</Button>
+                <Button tone="secondary" size="sm" onClick={() => setShowAddWorld(false)}>{ui('profile.cancel')}</Button>
+              </div>
+            </div>
+          </Panel>
         )}
-      </div>
+      </section>
 
-      {/* Ask topics */}
-      <div className="mt-5">
-        <SectionLabel>{ui('profile.ask_me')}</SectionLabel>
-        <div className="flex flex-wrap gap-[6px] mb-2">
+      {/* ask me about */}
+      <section>
+        <SectionHeader cn="可以问我" className="mb-3">{ui('profile.ask_me')}</SectionHeader>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 9 }}>
           {askTopics.map((topic, i) => (
-            <span key={i} className="inline-flex items-center gap-1">
-              <Chip variant="wash" tone="neutral">{topic.text}</Chip>
-              <button
-                type="button"
-                onClick={() => setAskTopics(askTopics.filter((_, j) => j !== i))}
-                className="border-none bg-transparent cursor-pointer p-0"
-              >
-                <Icon name="x" size={10} color="var(--color-faint)" />
-              </button>
-            </span>
+            <Tag key={i} text={topic.text} tone="gold" onRemove={() => setAskTopics(askTopics.filter((_, j) => j !== i))} />
           ))}
         </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newAsk}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="rof-input" style={{ flex: 1 }} type="text" value={newAsk}
             onChange={(e) => setNewAsk(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && newAsk.trim()) { setAskTopics([...askTopics, { original: null, text: newAsk.trim(), lang }]); setNewAsk(''); } }}
-            placeholder={ui('profile.add_topic')}
-            className="parch-input flex-1"
-          />
-          <button
-            type="button"
-            onClick={() => { if (newAsk.trim()) { setAskTopics([...askTopics, { original: null, text: newAsk.trim(), lang }]); setNewAsk(''); } }}
-            className="w-9 h-9 grid place-items-center rounded-xs bg-transparent border border-line cursor-pointer shrink-0"
-          >
-            <Icon name="plus" size={14} color="var(--color-bronze)" />
-          </button>
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTopic(askTopics, setAskTopics, newAsk, () => setNewAsk('')); } }}
+            placeholder={ui('profile.add_topic')} />
+          <Button tone="secondary" onClick={() => addTopic(askTopics, setAskTopics, newAsk, () => setNewAsk(''))}>+</Button>
         </div>
-      </div>
+      </section>
 
-      {/* Want topics */}
-      <div className="mt-5">
-        <SectionLabel>{ui('profile.i_want')}</SectionLabel>
-        <div className="flex flex-wrap gap-[6px] mb-2">
+      {/* i want to */}
+      <section>
+        <SectionHeader cn="我想要" className="mb-3">{ui('profile.i_want')}</SectionHeader>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 9 }}>
           {wantTopics.map((topic, i) => (
-            <span key={i} className="inline-flex items-center gap-1">
-              <Chip variant="wash" tone="green">{topic.text}</Chip>
-              <button
-                type="button"
-                onClick={() => setWantTopics(wantTopics.filter((_, j) => j !== i))}
-                className="border-none bg-transparent cursor-pointer p-0"
-              >
-                <Icon name="x" size={10} color="var(--color-faint)" />
-              </button>
-            </span>
+            <Tag key={i} text={topic.text} tone="sage" onRemove={() => setWantTopics(wantTopics.filter((_, j) => j !== i))} />
           ))}
         </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newWant}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="rof-input" style={{ flex: 1 }} type="text" value={newWant}
             onChange={(e) => setNewWant(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && newWant.trim()) { setWantTopics([...wantTopics, { original: null, text: newWant.trim(), lang }]); setNewWant(''); } }}
-            placeholder={ui('profile.add_topic')}
-            className="parch-input flex-1"
-          />
-          <button
-            type="button"
-            onClick={() => { if (newWant.trim()) { setWantTopics([...wantTopics, { original: null, text: newWant.trim(), lang }]); setNewWant(''); } }}
-            className="w-9 h-9 grid place-items-center rounded-xs bg-transparent border border-line cursor-pointer shrink-0"
-          >
-            <Icon name="plus" size={14} color="var(--color-bronze)" />
-          </button>
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTopic(wantTopics, setWantTopics, newWant, () => setNewWant('')); } }}
+            placeholder={ui('profile.add_topic')} />
+          <Button tone="secondary" onClick={() => addTopic(wantTopics, setWantTopics, newWant, () => setNewWant(''))}>+</Button>
         </div>
-      </div>
+      </section>
 
-      {/* Contact */}
-      <div className="mt-5">
-        <SectionLabel>{ui('profile.contact_pref')}</SectionLabel>
-        <Field label={ui('profile.method')}>
-          <select value={contactKind} onChange={(e) => setContactKind(e.target.value as typeof contactKind)} className="parch-input">
-            <option value="whatsapp">WhatsApp</option>
-            <option value="wechat">WeChat</option>
-            <option value="email">Email</option>
-            <option value="class">{ui('profile.contact_class')}</option>
-          </select>
-        </Field>
-        <Field label={ui('profile.contact_value')}>
-          <input type="text" value={contactValue} onChange={(e) => setContactValue(e.target.value)} className="parch-input" />
-        </Field>
-      </div>
+      {/* contact */}
+      <section>
+        <SectionHeader cn="联系方式" className="mb-3">{ui('profile.contact_pref')}</SectionHeader>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Field label={ui('profile.method')} cn="方式">
+            <select className="rof-input" value={contactKind} onChange={(e) => setContactKind(e.target.value as typeof contactKind)}>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="wechat">WeChat</option>
+              <option value="email">Email</option>
+              <option value="class">{ui('profile.contact_class')}</option>
+            </select>
+          </Field>
+          {/* "Find me in class" needs no handle, so the field would only invite
+              a value that is never read. */}
+          {contactKind !== 'class' && (
+            <Field label={ui('profile.contact_value')} cn="账号">
+              <input className="rof-input" type="text" value={contactValue} onChange={(e) => setContactValue(e.target.value)} />
+            </Field>
+          )}
+        </div>
+      </section>
 
-      {/* Admin link */}
+      <Divider />
+
       {profile.is_curator && (
-        <div className="mt-5 border-t border-line pt-4">
-          <button
-            type="button"
-            onClick={() => router.push('/admin')}
-            className="flex items-center gap-2 w-full bg-transparent border border-line rounded-xs p-3 cursor-pointer text-left"
-          >
-            <Icon name="shield" size={16} color="var(--color-bronze)" />
-            <span className="font-display font-bold text-eyebrow tracking-[0.12em] uppercase text-bronze">{ui('profile.curator_desk')}</span>
-            <Icon name="chevron-right" size={14} color="var(--color-faint)" className="ml-auto" />
-          </button>
-        </div>
+        <Panel pad={12} tone="navy" innerRule={false} onClick={() => router.push('/admin')}>
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)' }}>[*]</span>
+            <span className="rof-label inline-flex items-baseline" style={{ gap: 6, color: 'var(--color-gold)', flex: 1 }}>
+              <span>{ui('profile.curator_desk')}</span>
+              <span className="rof-cjk">策展人</span>
+            </span>
+            <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)' }}>&gt;</span>
+          </div>
+        </Panel>
       )}
 
-      {/* Sign out */}
-      <div className="mt-5 border-t border-line pt-4">
-        <button
-          type="button"
-          onClick={signOut}
-          className="font-serif text-xs text-red underline cursor-pointer bg-transparent border-none"
-        >
-          {ui('auth.sign_out')}
-        </button>
+      <div>
+        <Button tone="secondary" size="sm" onClick={signOut}>{ui('auth.sign_out')}</Button>
       </div>
 
-      {/* Sticky save */}
-      <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-[18px] pb-3 pt-2 bg-white/90 backdrop-blur-md border-t border-line z-40">
-        {error && (
-          <div className="mb-2 flex items-center gap-[7px] font-serif text-xs text-red">
-            <Icon name="x" size={14} color="var(--color-red)" />{error}
-          </div>
-        )}
-        <Button tone="ink" onClick={handleSave} loading={saving} icon={<Icon name="check" size={15} color="#fff" />}>
+      {/* The save bar sticks to the bottom of the scrolling <main>, not the
+          viewport: the tab bar is a flex sibling of that region, so a fixed
+          bar would sit on top of it — and inside the desktop phone frame it
+          would escape the frame entirely. */}
+      <div style={{
+        position: 'sticky', bottom: 0, zIndex: 40, marginTop: 4,
+        padding: '10px 0 0', background: 'var(--color-cream)',
+        borderTop: '3px solid var(--color-line)',
+      }}>
+        {error ? <div style={{ marginBottom: 9 }}><ErrorNote>{error}</ErrorNote></div> : null}
+        <Button tone="dark" size="lg" block onClick={handleSave} loading={saving} disabled={saving}>
           {saving ? ui('profile.saving') : saved ? ui('profile.saved') : ui('profile.save')}
         </Button>
       </div>
-    </div>
+    </Page>
   );
 }

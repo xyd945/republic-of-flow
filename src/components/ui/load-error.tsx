@@ -1,7 +1,7 @@
 'use client';
 
-import { Icon } from './icons';
 import { useI18n } from '@/lib/i18n/context';
+import { Bi, Button, Panel } from '@/components/pixel';
 
 /**
  * What a screen shows when it could not read its data.
@@ -16,21 +16,27 @@ import { useI18n } from '@/lib/i18n/context';
 export function LoadError({ message, onRetry }: { message: string; onRetry?: () => void }) {
   const { ui } = useI18n();
   return (
-    <div className="px-[18px] py-[40px] text-center">
-      <div className="w-9 h-9 mx-auto mb-3 grid place-items-center rounded-full border border-line">
-        <Icon name="x" size={16} color="var(--color-red)" />
-      </div>
-      <div className="font-serif text-sm text-ink mb-[6px]">{ui('common.load_failed')}</div>
-      <div className="font-serif text-xs text-faint mb-4 break-words">{message}</div>
-      {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="font-display font-bold text-eyebrow tracking-[0.12em] uppercase text-bronze bg-transparent border border-line rounded-xs px-4 py-2 cursor-pointer"
-        >
-          {ui('common.try_again')}
-        </button>
-      )}
+    <div style={{ padding: '24px 14px' }}>
+      <Panel pad={16} corners accent="var(--color-red)">
+        <div className="text-center">
+          <div aria-hidden style={{
+            width: 34, height: 34, margin: '0 auto 12px', display: 'grid', placeItems: 'center',
+            background: 'var(--color-red-tint)', border: '2px solid var(--color-red)',
+            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+            color: 'var(--color-red)', lineHeight: 1,
+          }}>!</div>
+          <Bi en={ui('common.load_failed')} zh="加载失败" color="var(--color-red)" />
+          <p style={{
+            margin: '10px 0 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)',
+            lineHeight: 1.6, wordBreak: 'break-word',
+          }}>{message}</p>
+          {onRetry && (
+            <div style={{ marginTop: 14 }}>
+              <Button tone="secondary" onClick={onRetry}>{ui('common.try_again')}</Button>
+            </div>
+          )}
+        </div>
+      </Panel>
     </div>
   );
 }

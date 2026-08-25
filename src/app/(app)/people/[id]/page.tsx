@@ -2,101 +2,68 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Avatar, Polaroid, Icon, Chip, WaxSeal, Badge, Button, LoadError } from '@/components/ui';
-import { CATEGORY_COLORS } from '@/lib/categories';
-import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
+import { CATEGORIES } from '@/lib/i18n/translations';
 import { usePeople } from '@/lib/data/views';
+import { LoadError } from '@/components/ui';
+import { Page } from '@/components/pixel/shell';
+import {
+  Avatar, Bi, Button, Divider, EmptyState, Panel,
+  PixelSpinner, SectionHeader, StatusChip,
+} from '@/components/pixel';
 
-/**
- * Copy that also works on iOS.
- *
- * navigator.clipboard is exposed only in secure contexts, so it is missing on
- * an iPhone pointed at a plain-http LAN dev server — and Safari can reject it
- * even over https if the write drifts out of the user gesture. The deprecated
- * selection trick still works in both cases, so it backs the modern API up.
- */
+const CONTACT_LABELS: Record<string, { en: string; zh: string }> = {
+  whatsapp: { en: 'WhatsApp', zh: 'WhatsApp' },
+  wechat: { en: 'WeChat', zh: '微信' },
+  email: { en: 'Email', zh: '邮箱' },
+  class: { en: 'Find me in class', zh: '课上找我' },
+};
+
+/** Clipboard needs a secure context; iOS Safari over http has none. */
 async function copyText(text: string): Promise<boolean> {
-  if (window.isSecureContext && navigator.clipboard?.writeText) {
-    try {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
       return true;
-    } catch {
-      // fall through to the legacy path
     }
-  }
+  } catch { /* fall through */ }
   try {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    // readonly keeps the iOS keyboard from flashing up; contentEditable is what
-    // actually lets Safari select the contents. Both are needed there.
-    ta.setAttribute('readonly', '');
-    ta.contentEditable = 'true';
-    // Off-screen but not display:none — iOS won't select an unrendered node.
-    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;';
-    document.body.appendChild(ta);
-
-    const range = document.createRange();
-    range.selectNodeContents(ta);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    ta.setSelectionRange(0, text.length);
-
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.setAttribute('readonly', '');
+    el.contentEditable = 'true';
+    el.style.position = 'fixed';
+    el.style.opacity = '0';
+    document.body.appendChild(el);
+    el.select();
+    el.setSelectionRange(0, text.length);
     const ok = document.execCommand('copy');
-    sel?.removeAllRanges();
-    document.body.removeChild(ta);
+    document.body.removeChild(el);
     return ok;
   } catch {
     return false;
   }
 }
 
-const CONTACT_META: Record<string, { icon: string; label: string }> = {
-  whatsapp: { icon: 'link', label: 'WhatsApp' },
-  wechat: { icon: 'link', label: 'WeChat' },
-  email: { icon: 'link', label: 'Email' },
-  class: { icon: 'users', label: 'In-class' },
-};
-
 export default function DossierPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { t, ui, lang } = useI18n();
-
   const { people: profiles, loading, error } = usePeople();
-  // Declared before the early returns below — hooks can't live after a branch.
   const [notice, setNotice] = useState('');
 
-  // Must come before the not-found branch, or the dossier flashes
-  // "Profile not found" on every load.
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <div className="grid place-items-center" style={{ minHeight: '50vh' }}><PixelSpinner size={20} color="var(--color-gold)" /></div>;
   }
-
   if (error) return <LoadError message={error} onRetry={() => window.location.reload()} />;
 
   const profile = profiles.find((p) => p.id === id);
   if (!profile) {
-    return (
-      <div className="p-[18px] text-center pt-20">
-        <div className="font-serif text-base text-muted">{ui('dossier.not_found')}</div>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="mt-4 font-serif text-xs text-bronze underline cursor-pointer bg-transparent border-none"
-        >
-          {ui('dossier.go_back')}
-        </button>
-      </div>
-    );
+    return <Page><EmptyState title="No such member" cn="找不到这位成员" /></Page>;
   }
 
-  const contact = CONTACT_META[profile.contact_kind] ?? { icon: 'link', label: profile.contact_kind };
+  const contact = CONTACT_LABELS[profile.contact_kind] ?? { en: profile.contact_kind, zh: '' };
+  const worlds = profile.hidden_worlds.filter((w) => w.visibility === 'members');
 
   /* "Match, then disappear" — hand off to the channel they actually use rather
      than building yet another inbox. */
@@ -111,7 +78,7 @@ export default function DossierPage() {
         window.location.href = `mailto:${value}`;
         break;
       case 'whatsapp':
-        window.open(`https://wa.me/${value.replace(/[^\d]/g, '')}`, '_blank', 'noopener');
+        window.open(`https://wa.me/${value!.replace(/[^\d]/g, '')}`, '_blank', 'noopener');
         break;
       case 'wechat':
         /* Tencent discontinued weixin://dl/chat?username= and publishes no
@@ -119,11 +86,7 @@ export default function DossierPage() {
            tickets. Best available: put the id on the clipboard, then launch
            WeChat so they can paste it straight into search. Copy first, so a
            blocked or unhandled scheme still leaves them something usable. */
-        setNotice(
-          (await copyText(value))
-            ? ui('dossier.copied')
-            : `${ui('dossier.copy_failed')} ${value}`,
-        );
+        setNotice((await copyText(value!)) ? ui('dossier.copied') : `${ui('dossier.copy_failed')} ${value}`);
         window.location.href = 'weixin://';
         break;
       default:
@@ -131,142 +94,133 @@ export default function DossierPage() {
     }
   };
 
+  const Section = ({ title, cn, children }: { title: string; cn: string; children: React.ReactNode }) => (
+    <section>
+      <SectionHeader cn={cn} className="mb-3">{title}</SectionHeader>
+      {children}
+    </section>
+  );
+
   return (
-    <div className="pb-[90px]">
-      {/* Back header */}
-      <div className="flex items-center gap-3 px-[18px] pt-[16px] pb-[10px]">
-        <button type="button" onClick={() => router.back()} className="w-8 h-8 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer">
-          <Icon name="chevron-right" size={16} color="var(--color-ink)" style={{ transform: 'rotate(180deg)' }} />
-        </button>
-        <span className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze">{ui('dossier.title')}</span>
-      </div>
-
-      {/* Hero card */}
-      <div className="px-[18px]">
-        <div className="sheet stack p-0 overflow-hidden">
-          <div className="relative px-[22px] pt-[28px] pb-[18px] flex flex-col items-center text-center">
-            {/* Tape decorations */}
-            <div className="tape" style={{ top: -4, right: 20, transform: 'rotate(6deg)' }} />
-            <div className="tape" style={{ top: 12, left: -10, transform: 'rotate(-14deg)', width: 56, height: 22 }} />
-
-            <Polaroid initials={profile.initials} id={profile.id} size={88} rotate={-2.5} clip className="mb-4" />
-
-            <WaxSeal size={32} label={profile.initials[0] ?? profile.full_name[0] ?? '?'} className="absolute top-[18px] right-[22px]" />
-
-            <h1 className="font-serif font-semibold text-xl text-ink leading-[1.25]">{profile.full_name}</h1>
-            {profile.native_name && (
-              <div className="font-cjk text-sm text-muted mt-[2px]">{profile.native_name}</div>
-            )}
-            <div className="font-serif text-sm text-muted mt-1">{t(profile.headline)}</div>
-            <div className="flex items-center gap-2 mt-[6px]">
-              <Badge>{profile.class_name}</Badge>
-              {profile.is_featured && <Badge tone="green">{ui('dossier.featured')}</Badge>}
-            </div>
+    <Page>
+      {/* the plate */}
+      <Panel pad={16} corners>
+        <div className="flex flex-col items-center text-center">
+          <Avatar initials={profile.initials} id={profile.id} size={72} featured={profile.is_featured} />
+          <div style={{ marginTop: 12 }}>
+            <Bi en={`Founder No. ${String(profile.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+          </div>
+          <h1 style={{
+            margin: '7px 0 0', fontFamily: 'var(--font-display)', fontWeight: 700,
+            fontSize: 'var(--text-h2)', letterSpacing: 'var(--tracking-display)',
+            textTransform: 'uppercase', color: 'var(--color-ink)', lineHeight: 1.25,
+          }}>{profile.full_name}</h1>
+          {profile.native_name ? <div className="rof-cjk" style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink-2)', marginTop: 4 }}>{profile.native_name}</div> : null}
+          {t(profile.headline) ? <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-muted)', marginTop: 8 }}>{t(profile.headline)}</div> : null}
+          <div className="flex items-center justify-center" style={{ gap: 6, marginTop: 11, flexWrap: 'wrap' }}>
+            <StatusChip tone="neutral">{profile.class_name}</StatusChip>
+            {profile.is_featured ? <StatusChip tone="matched" cn="推荐">Featured</StatusChip> : null}
           </div>
         </div>
-      </div>
+      </Panel>
 
-      {/* Professional context */}
-      <div className="px-[18px] mt-5">
-        <SectionLabel>{ui('dossier.about')}</SectionLabel>
-        <div className="font-serif text-sm text-ink-2 leading-[1.65] mb-2">{t(profile.role)}</div>
-        <div className="font-serif text-sm text-muted leading-[1.65]">{t(profile.intro)}</div>
-        {t(profile.professional) && (
-          <div className="font-serif text-xs text-faint leading-[1.55] mt-2 italic">{t(profile.professional)}</div>
-        )}
-      </div>
+      {/* about */}
+      {(t(profile.role) || t(profile.intro) || t(profile.professional)) && (
+        <Section title="About" cn="关于">
+          <Panel pad={14}>
+            {t(profile.role) ? <div style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink)' }}>{t(profile.role)}</div> : null}
+            {t(profile.intro) ? <p style={{ margin: '9px 0 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>{t(profile.intro)}</p> : null}
+            {t(profile.professional) ? (
+              <>
+                <Divider className="my-3" />
+                <p style={{ margin: 0, fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>{t(profile.professional)}</p>
+              </>
+            ) : null}
+          </Panel>
+        </Section>
+      )}
 
-      {/* Hidden Worlds */}
-      {profile.hidden_worlds.length > 0 && (
-        <div className="px-[18px] mt-5">
-          <SectionLabel>{ui('dossier.hidden_worlds')}</SectionLabel>
-          <div className="flex flex-col gap-[8px]">
-            {profile.hidden_worlds.map((hw) => {
-              const cat = CATEGORIES.find((c) => c.id === hw.category);
-              const color = CATEGORY_COLORS[hw.category] ?? '#8f7044';
+      {/* hidden worlds — the point of the whole app */}
+      <Section title="Hidden Worlds" cn="隐藏世界">
+        {worlds.length ? (
+          <div style={{ display: 'grid', gap: 9 }}>
+            {worlds.map((w) => {
+              const cat = CATEGORIES.find((c) => c.id === w.category);
               return (
-                <div key={hw.id} className="flex items-center gap-3 p-[10px] rounded-xs" style={{ background: 'rgba(239,228,209,0.5)' }}>
-                  <div className="w-8 h-8 rounded-full grid place-items-center shrink-0" style={{ background: color, opacity: 0.85 }}>
-                    <Icon name="star" size={14} color="#fdf0e6" />
+                <Panel key={w.id} pad={11} innerRule={false} accent={`var(--color-cat-${w.category})`}>
+                  <div className="flex items-center" style={{ gap: 10 }}>
+                    <span aria-hidden style={{
+                      width: 26, height: 26, flex: 'none', display: 'block',
+                      background: `var(--color-cat-${w.category})`, border: '2px solid var(--color-navy-900)',
+                    }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink)' }}>{t(w.name)}</div>
+                      {cat ? <div style={{ marginTop: 3 }}><Bi en={cat.en} zh={cat.zh} color="var(--color-faint)" /></div> : null}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-serif font-semibold text-sm text-ink">{t(hw.name)}</div>
-                    <div className="font-serif text-eyebrow text-faint">{(lang === 'zh' ? cat?.zh : cat?.en) ?? hw.category}</div>
-                  </div>
-                </div>
+                </Panel>
               );
             })}
           </div>
-        </div>
-      )}
+        ) : <EmptyState title="Nothing revealed yet" cn="还没有公开的隐藏世界" />}
+      </Section>
 
-      {/* Ask & Want */}
-      {(profile.ask_topics.length > 0 || profile.want_topics.length > 0) && (
-        <div className="px-[18px] mt-5">
-          {profile.ask_topics.length > 0 && (
-            <>
-              <SectionLabel>{ui('dossier.ask_me')}</SectionLabel>
-              <div className="flex flex-wrap gap-[6px] mb-3">
-                {profile.ask_topics.map((topic, i) => (
-                  <Chip key={i} variant="wash" tone="neutral">{t(topic)}</Chip>
-                ))}
-              </div>
-            </>
-          )}
-          {profile.want_topics.length > 0 && (
-            <>
-              <SectionLabel>{ui('dossier.i_want')}</SectionLabel>
-              <div className="flex flex-wrap gap-[6px]">
-                {profile.want_topics.map((topic, i) => (
-                  <Chip key={i} variant="wash" tone="green">{t(topic)}</Chip>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Languages */}
-      {profile.languages.length > 0 && (
-        <div className="px-[18px] mt-5">
-          <SectionLabel>{ui('dossier.languages')}</SectionLabel>
-          <div className="flex flex-wrap gap-[6px]">
-            {profile.languages.map((lang) => (
-              <Chip key={lang}>{lang}</Chip>
+      {/* topics */}
+      {profile.ask_topics.length > 0 && (
+        <Section title="Ask Me About" cn="可以问我">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {profile.ask_topics.map((a, i) => (
+              <span key={i} className="rof-label" style={{
+                padding: '5px 8px', background: 'var(--color-gold-tint)',
+                border: '2px solid var(--color-gold)', color: '#6B5223', textTransform: 'none',
+              }}>{t(a)}</span>
             ))}
           </div>
-        </div>
+        </Section>
       )}
 
-      {/* Contact */}
-      <div className="px-[18px] mt-5">
-        <SectionLabel>{ui('dossier.preferred_contact')}</SectionLabel>
-        <div className="flex items-center gap-3 p-[10px] rounded-xs border border-line">
-          <Icon name={contact.icon} size={16} color="var(--color-bronze)" />
-          <div>
-            <div className="font-serif font-semibold text-xs text-ink">{contact.label}</div>
-            <div className="font-serif text-xs text-muted">{profile.contact_value}</div>
+      {profile.want_topics.length > 0 && (
+        <Section title="I Want To" cn="我想要">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {profile.want_topics.map((w, i) => (
+              <span key={i} className="rof-label" style={{
+                padding: '5px 8px', background: 'var(--color-sage-tint)',
+                border: '2px solid var(--color-sage)', color: '#3F5742', textTransform: 'none',
+              }}>{t(w)}</span>
+            ))}
           </div>
-        </div>
-      </div>
+        </Section>
+      )}
 
-      {/* Sticky action bar */}
-      <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-[18px] pb-3 pt-2 bg-white/90 backdrop-blur-md border-t border-line z-40">
-        {notice && (
-          <div className="mb-2 text-center font-serif text-xs text-muted">{notice}</div>
-        )}
-        <Button tone="bronze" onClick={connect} icon={<Icon name="link" size={15} color="var(--color-dark)" />}>
-          {ui('dossier.connect_with')} {profile.full_name.split(' ')[0]}
-        </Button>
-      </div>
-    </div>
-  );
-}
+      {profile.languages.length > 0 && (
+        <Section title="Languages" cn="语言">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {profile.languages.map((l) => <StatusChip key={l} tone="neutral">{l}</StatusChip>)}
+          </div>
+        </Section>
+      )}
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[8px]">
-      {children}
-    </div>
+      {/* contact — the Republic gets out of the way here */}
+      <Section title="Preferred Contact" cn="联系方式">
+        <Panel pad={13} tone="gold">
+          <Bi en={contact.en} zh={contact.zh} color="var(--color-navy-900)" />
+          {profile.contact_value ? (
+            <div style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink)', marginTop: 5, wordBreak: 'break-all' }}>{profile.contact_value}</div>
+          ) : null}
+          <div style={{ marginTop: 12 }}>
+            <Button tone="dark" size="lg" block onClick={connect}>
+              {ui('dossier.connect_with')} {profile.full_name.split(' ')[0]}
+            </Button>
+          </div>
+          {notice ? (
+            <div style={{ marginTop: 9, fontSize: 'var(--text-body)', color: 'var(--color-ink-2)' }}>{notice}</div>
+          ) : null}
+        </Panel>
+      </Section>
+
+      <div className="text-center">
+        <Bi en="Match, then disappear" zh="配对之后，系统就退场" color="var(--color-faint)" />
+      </div>
+    </Page>
   );
 }

@@ -1,62 +1,36 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Chip, WaxSeal, LoadError } from '@/components/ui';
-import { CATEGORY_COLORS } from '@/lib/categories';
-import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
 import { useListings, usePeople } from '@/lib/data/views';
-import { useNotifications } from '@/lib/data/notifications';
-import { NotificationPanel } from '@/components/notification-panel';
+import { LoadError } from '@/components/ui';
+import { Page } from '@/components/pixel/shell';
+import {
+  Avatar, Bi, BiText, Button, EmptyState, Panel,
+  PixelSpinner, SectionHeader, Sprite, StatusChip,
+} from '@/components/pixel';
 
-function SectionHeading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between mb-[10px]">
-      <h2 className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase" style={{ color: 'var(--color-bronze)' }}>
-        {children}
-      </h2>
-      {action}
-    </div>
-  );
-}
-
-function greetingKey(hour: number) {
-  if (hour < 12) return 'home.morning';
-  if (hour < 18) return 'home.afternoon';
-  return 'home.evening';
-}
-
+/**
+ * Home — the discovery surface.
+ *
+ * Follows the design's composition: hero panel, a shuffled member spotlight,
+ * a Hidden World, and a glance at the market. The design's stat row is kept
+ * but reduced to the three numbers we can actually count — it also carries
+ * badges and XP, which this app has never had.
+ */
 export default function HomePage() {
   const router = useRouter();
   const { t, ui, lang } = useI18n();
   const { listings, viewerProfileId, loading, error } = useListings();
   const { people: profiles } = usePeople();
   const [shuffleIdx, setShuffleIdx] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const notifications = useNotifications();
-  const unreadCount = notifications.unreadCount;
 
-  /**
-   * Opening the panel is what marks the batch read — matching what the member
-   * has actually now seen. Deliberately not on hover or on page load.
-   */
-  const openNotifications = async () => {
-    setShowNotifications(true);
-    // Refresh first. The hook loads on mount and when the tab regains focus,
-    // so on a tab that never lost focus the panel would otherwise show a
-    // cached list and mark THAT read, silently swallowing anything that
-    // arrived in between.
-    // Only mark read if the refresh actually succeeded. Marking an inbox read
-    // that we failed to load would hide mail the member never saw.
-    if (await notifications.refetch()) notifications.markRead();
-  };
   // Resolved after mount — the server's clock would cause a hydration mismatch.
   const [hour, setHour] = useState<number | null>(null);
   useEffect(() => setHour(new Date().getHours()), []);
 
   const me = profiles.find((p) => p.id === viewerProfileId);
-  // Only surface other members in discovery — seeing yourself is noise.
   const others = useMemo(
     () => profiles.filter((p) => p.id !== viewerProfileId && p.is_active),
     [profiles, viewerProfileId]
@@ -71,192 +45,171 @@ export default function HomePage() {
     return arr;
   }, [others, shuffleIdx]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-2 border-bronze border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const spot = shuffled[0];
+  const worldCount = others.reduce((n, p) => n + p.hidden_worlds.length, 0);
 
+  // A Hidden World from someone else, rotated with the shuffle so the page
+  // never feels static between visits.
+  const worldPool = useMemo(
+    () => others.flatMap((p) => p.hidden_worlds.filter((w) => w.visibility === 'members').map((w) => ({ p, w }))),
+    [others]
+  );
+  const pick = worldPool.length ? worldPool[(shuffleIdx * 3 + 1) % worldPool.length] : null;
+
+  const openMarket = listings.filter((l) => l.status === 'open' && l.creator_profile_id !== viewerProfileId);
+  const wanted = openMarket.find((l) => l.type === 'wanted');
+  const offer = openMarket.find((l) => l.type === 'offer');
+
+  if (loading) {
+    return <div className="grid place-items-center" style={{ minHeight: '50vh' }}><PixelSpinner size={20} color="var(--color-gold)" /></div>;
+  }
   if (error) return <LoadError message={error} onRetry={() => window.location.reload()} />;
 
-  const discoveryPerson = shuffled[0];
-  const randomWorld = discoveryPerson?.hidden_worlds[0];
-  const suggested = others.filter((p) => p.id !== discoveryPerson?.id).slice(0, 5);
-  const recentListings = listings.slice(0, 3);
-
-  const worldCategory = CATEGORIES.find((c) => c.id === randomWorld?.category);
-  const worldColor = CATEGORY_COLORS[randomWorld?.category ?? 'craft'] ?? '#8f7044';
-  const firstName = me?.full_name?.split(' ')[0] ?? ui('home.explorer');
+  const greeting = hour === null ? ui('home.welcome') : ui(hour < 12 ? 'home.morning' : hour < 18 ? 'home.afternoon' : 'home.evening');
 
   return (
-    <div className="px-[18px] pt-[22px]">
-      {/* Masthead */}
-      <div className="flex items-center justify-between mb-[22px]">
-        <div>
-          <WaxSeal size={28} label="R" />
+    <Page>
+      {/* hero */}
+      <Panel pad={0} innerRule={false} style={{ overflow: 'hidden' }}>
+        <div style={{
+          height: 168, display: 'grid', placeItems: 'center',
+          background: 'linear-gradient(180deg, var(--color-mist-tint), var(--color-card))',
+          borderBottom: '2px solid var(--color-navy-900)',
+        }}>
+          <Sprite name="fountain" kind="sprites" size={150} alt="" />
         </div>
-        <button
-          type="button"
-          onClick={openNotifications}
-          aria-label={ui('notif.title')}
-          className="relative w-9 h-9 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer"
-        >
-          <Icon name="bell" size={17} color="var(--color-muted)" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-[3px] -right-[3px] min-w-[17px] h-[17px] px-[4px] grid place-items-center rounded-full bg-red font-display font-bold text-[10px] leading-none text-white">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </button>
+        <div style={{ padding: 16 }}>
+          <Bi en="The Republic Today" zh="今日共和国" color="var(--color-gold)" />
+          <h1 style={{
+            margin: '10px 0 0', fontFamily: 'var(--font-display)', fontWeight: 700,
+            fontSize: 'var(--text-h2)', lineHeight: 1.4, letterSpacing: 'var(--tracking-display)',
+            textTransform: 'uppercase', color: 'var(--color-ink)',
+          }}>
+            {greeting}{me?.full_name ? `, ${me.full_name}` : ''}
+          </h1>
+          <div style={{ marginTop: 12 }}>
+            <BiText lang={lang}
+              en="Someone here knows something you would never guess. Hidden World over resume."
+              zh="这里总有人藏着你猜不到的东西。隐藏世界，胜过简历。" />
+          </div>
+          <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
+            <Button tone="primary" size="lg" block cn="发现成员" onClick={() => router.push('/people')}>Discover People</Button>
+            <Button tone="secondary" size="lg" block cn="去市场" onClick={() => router.push('/market')}>Open the Market</Button>
+          </div>
+        </div>
+      </Panel>
+
+      {/* the three numbers we can actually count */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
+        {[
+          { n: profiles.length, en: 'Founders', zh: '创始人' },
+          { n: worldCount, en: 'Worlds', zh: '隐藏世界' },
+          { n: openMarket.length, en: 'Open', zh: '进行中' },
+        ].map((s) => (
+          <Panel key={s.en} pad={10} innerRule={false} className="text-center">
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h1)', color: 'var(--color-navy-700)', lineHeight: 1.25 }}>{s.n}</div>
+            <div style={{ marginTop: 5 }}><Bi en={s.en} zh={s.zh} color="var(--color-muted)" /></div>
+          </Panel>
+        ))}
       </div>
 
-      <h1 className="font-serif text-2xl text-ink mb-[22px] leading-[1.3]">
-        {hour === null ? ui('home.welcome') : ui(greetingKey(hour))}, <span className="italic">{firstName}</span>
-      </h1>
+      {/* discover someone new */}
+      {spot && (
+        <section>
+          <SectionHeader cn="认识新的人" className="mb-3"
+            trailing={
+              <button type="button" onClick={() => setShuffleIdx((i) => i + 1)}
+                style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}>
+                <Bi en="Shuffle" zh="换一个" color="var(--color-gold)" />
+              </button>
+            }>
+            Discover Someone New
+          </SectionHeader>
+          <Panel pad={14} corners>
+            <div className="flex items-start" style={{ gap: 13 }}>
+              <Avatar initials={spot.initials} id={spot.id} size={64} featured={spot.is_featured} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <Bi en={`Founder No. ${String(spot.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+                <div style={{
+                  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
+                  letterSpacing: 'var(--tracking-display)', color: 'var(--color-ink)', lineHeight: 1.25, marginTop: 5,
+                }}>{spot.full_name}</div>
+                {spot.native_name ? <div className="rof-cjk" style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink-2)', marginTop: 3 }}>{spot.native_name}</div> : null}
+                <div style={{ marginTop: 8 }}><StatusChip tone="neutral">{spot.class_name}</StatusChip></div>
+              </div>
+            </div>
+            {spot.hidden_worlds[0] && (
+              <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--color-white)', border: '2px dashed var(--color-line-soft)' }}>
+                <Bi en="Hidden World" zh="隐藏世界" color="var(--color-gold)" />
+                <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)', marginTop: 6 }}>{t(spot.hidden_worlds[0].name)}</div>
+              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <Button tone="primary" size="lg" block cn="查看档案" onClick={() => router.push(`/people/${spot.id}`)}>View Dossier</Button>
+            </div>
+          </Panel>
+        </section>
+      )}
 
-      {/* Discover someone new */}
-      <div className="sheet p-[18px] mb-5">
-        <SectionHeading
-          action={
-            <button
-              type="button"
-              onClick={() => setShuffleIdx((i) => i + 1)}
-              className="border-none bg-transparent cursor-pointer font-serif text-xs text-bronze underline underline-offset-[3px]"
-            >
-              {ui('home.shuffle')}
+      {/* hidden world of the day */}
+      {pick && (
+        <section>
+          <SectionHeader cn="今日隐藏世界" className="mb-3">Hidden World of the Day</SectionHeader>
+          <Panel pad={14} onClick={() => router.push(`/people/${pick.p.id}`)}>
+            <Bi en="Hidden World" zh="隐藏世界" color="var(--color-gold)" />
+            <div style={{
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+              letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
+              color: 'var(--color-ink)', marginTop: 7, lineHeight: 1.4,
+            }}>{t(pick.w.name)}</div>
+            <div className="flex items-center" style={{ gap: 9, marginTop: 11 }}>
+              <Avatar initials={pick.p.initials} id={pick.p.id} size={30} />
+              <span style={{ fontSize: 'var(--text-body)', color: 'var(--color-muted)' }}>
+                {pick.p.full_name}{pick.p.native_name ? ` · ${pick.p.native_name}` : ''}
+              </span>
+            </div>
+          </Panel>
+        </section>
+      )}
+
+      {/* market glance */}
+      <section>
+        <SectionHeader cn="市场动态" className="mb-3"
+          trailing={
+            <button type="button" onClick={() => router.push('/market')}
+              style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}>
+              <Bi en="All" zh="全部" color="var(--color-gold)" />
             </button>
-          }
-        >
-          {ui('home.discover')}
-        </SectionHeading>
-        {discoveryPerson ? (
-          <button
-            type="button"
-            onClick={() => router.push(`/people/${discoveryPerson.id}`)}
-            className="w-full flex items-center gap-[14px] bg-transparent border-none cursor-pointer text-left p-0"
-          >
-            <Avatar initials={discoveryPerson.initials} id={discoveryPerson.id} size={52} />
-            <div className="flex-1 min-w-0">
-              <div className="font-serif font-semibold text-base text-ink truncate">
-                {discoveryPerson.full_name}
+          }>
+          In the Market
+        </SectionHeader>
+        <div style={{ display: 'grid', gap: 12 }}>
+          {[wanted, offer].filter(Boolean).map((l) => (
+            <Panel key={l!.id} pad={13} onClick={() => router.push('/market')}>
+              <div className="flex items-center" style={{ gap: 7, marginBottom: 8 }}>
+                <StatusChip tone={l!.type === 'wanted' ? 'wanted' : 'offer'} cn={l!.type === 'wanted' ? '寻找' : '提供'}>
+                  {l!.type === 'wanted' ? 'Wanted' : 'Offer'}
+                </StatusChip>
+                <StatusChip tone="open" cn="进行中">Open</StatusChip>
               </div>
-              <div className="font-serif text-xs text-muted truncate">{t(discoveryPerson.headline)}</div>
-              {randomWorld && (
-                <div className="flex items-center gap-[6px] mt-[5px]">
-                  <span className="w-[6px] h-[6px] rounded-full" style={{ background: worldColor }} />
-                  <span className="font-serif text-xs text-faint truncate">{t(randomWorld.name)}</span>
-                </div>
-              )}
-            </div>
-            <Icon name="chevron-right" size={16} color="var(--color-faint)" />
-          </button>
-        ) : (
-          <div className="font-serif text-sm text-muted">
-            {ui('home.first_member')}
-          </div>
-        )}
-      </div>
-
-      {/* Hidden World of the day */}
-      {randomWorld && (
-      <div className="sheet-dark p-[18px] mb-5">
-        <SectionHeading>
-          <span className="text-dark-muted">{ui('home.hidden_world_day')}</span>
-        </SectionHeading>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full grid place-items-center" style={{ background: worldColor, opacity: 0.9 }}>
-            <Icon name="star" size={18} color="#fdf0e6" />
-          </div>
-          <div>
-            <div className="font-serif font-semibold text-base" style={{ color: 'var(--color-dark-paper)' }}>
-              {t(randomWorld?.name)}
-            </div>
-            <div className="font-serif text-xs" style={{ color: 'var(--color-dark-muted)' }}>
-              {(lang === 'zh' ? worldCategory?.zh : worldCategory?.en) ?? ''} &middot; {discoveryPerson.full_name}
-            </div>
-          </div>
+              <div style={{
+                fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+                letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
+                color: 'var(--color-ink)', lineHeight: 1.4,
+              }}>{t(l!.title)}</div>
+              <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-muted)', marginTop: 6 }}>
+                {l!.creator?.full_name ?? ui('common.unknown_member')}
+              </div>
+            </Panel>
+          ))}
+          {!wanted && !offer && <EmptyState title="Nothing open right now" cn="市场暂时安静" />}
         </div>
-      </div>
-      )}
+      </section>
 
-      {/* You may not know them yet */}
-      <SectionHeading
-        action={
-          <button
-            type="button"
-            onClick={() => router.push('/people')}
-            className="border-none bg-transparent cursor-pointer font-serif text-xs text-bronze underline underline-offset-[3px]"
-          >
-            {ui('home.see_all')}
-          </button>
-        }
-      >
-        {ui('home.may_not_know')}
-      </SectionHeading>
-      <div className="flex gap-3 overflow-x-auto no-scrollbar pb-4 -mx-[18px] px-[18px]">
-        {suggested.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => router.push(`/people/${p.id}`)}
-            className="shrink-0 w-[120px] bg-transparent border-none cursor-pointer p-0 text-left"
-          >
-            <div className="sheet p-3 flex flex-col items-center text-center">
-              <Avatar initials={p.initials} id={p.id} size={42} className="mb-2" />
-              <div className="font-serif font-semibold text-xs text-ink truncate w-full">{p.full_name}</div>
-              <div className="font-serif text-eyebrow text-muted truncate w-full mt-[2px]">{t(p.headline)}</div>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* In the Market now */}
-      <SectionHeading
-        action={
-          <button
-            type="button"
-            onClick={() => router.push('/market')}
-            className="border-none bg-transparent cursor-pointer font-serif text-xs text-bronze underline underline-offset-[3px]"
-          >
-            {ui('home.see_all')}
-          </button>
-        }
-      >
-        {ui('home.in_market')}
-      </SectionHeading>
-      <div className="flex flex-col gap-3 pb-6">
-        {recentListings.map((listing) => (
-          <button
-            key={listing.id}
-            type="button"
-            onClick={() => router.push('/market')}
-            className="sheet p-[14px] w-full flex items-start gap-3 bg-transparent border-none cursor-pointer text-left"
-          >
-            <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={36} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-[3px]">
-                <Chip variant="wash" tone={listing.type === 'wanted' ? 'red' : 'green'}>
-                  {listing.type === 'wanted' ? ui('market.wanted') : ui('market.offer_one')}
-                </Chip>
-              </div>
-              <div className="font-serif font-semibold text-sm text-ink truncate">{t(listing.title)}</div>
-              <div className="font-serif text-xs text-muted mt-[2px]">{listing.creator?.full_name ?? ui('common.unknown_member')}</div>
-            </div>
-            <Icon name="chevron-right" size={14} color="var(--color-faint)" className="mt-1" />
-          </button>
-        ))}
-      </div>
-
-      {showNotifications && (
-        <NotificationPanel
-          items={notifications.items}
-          loading={notifications.loading}
-          error={notifications.error}
-          onClose={() => setShowNotifications(false)}
-        />
-      )}
-    </div>
+      {/* the Republic's own line — it gets out of the way once you've met */}
+      <Panel tone="navy" pad={13} innerRule={false} className="text-center">
+        <Bi en="One Republic, Infinite Connections" zh="一个共和国，无限连接" color="var(--color-gold)" />
+      </Panel>
+    </Page>
   );
 }

@@ -283,6 +283,7 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
     zh: '已保存，但无法重新读取。请刷新查看最新版本。',
   },
   'common.try_again': { en: 'Try again', zh: '重试' },
+  'common.close': { en: 'Close', zh: '关闭' },
 };
 
 export function ui(key: string, lang: Language = 'en'): string {
