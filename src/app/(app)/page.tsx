@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, Icon, Chip, WaxSeal, LoadError } from '@/components/ui';
-import { CATEGORY_COLORS } from '@/lib/seed';
+import { CATEGORY_COLORS } from '@/lib/categories';
 import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
 import { useListings, usePeople } from '@/lib/data/views';

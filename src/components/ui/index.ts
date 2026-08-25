@@ -9,3 +9,5 @@ export { Wordmark } from './wordmark';
 export { BottomNav } from './bottom-nav';
 export { LanguageSwitcher } from './language-switcher';
 export { LoadError } from './load-error';
+export { Segmented } from './segmented';
+export type { SegmentedTone } from './segmented';

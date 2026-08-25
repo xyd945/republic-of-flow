@@ -2,34 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Badge, Button, Chip, Spinner, LoadError } from '@/components/ui';
+import { Avatar, Icon, Badge, Button, Chip, Spinner, LoadError, Segmented } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
 import { useCuratorView } from '@/lib/data/views';
 import { useCuratorSuggest, useCuratorUpdateMember, useDismatch } from '@/lib/data/mutations';
 import { createClient } from '@/lib/supabase/client';
 import { CLASSES, type ClassName } from '@/lib/classes';
 import type { MatchWithParties } from '@/types';
-
-function Segmented({ items, value, onChange }: { items: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
-  return (
-    <div className="flex gap-0 rounded-xs overflow-hidden border" style={{ borderColor: 'var(--color-dark-line)' }}>
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onChange(item.id)}
-          className="flex-1 py-[8px] border-none cursor-pointer font-display font-bold text-eyebrow tracking-[0.10em] uppercase transition-colors"
-          style={{
-            background: item.id === value ? 'var(--color-dark-paper)' : 'transparent',
-            color: item.id === value ? 'var(--color-dark)' : 'var(--color-dark-muted)',
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function StatBlock({ value, label }: { value: number; label: string }) {
   return (
@@ -228,6 +207,7 @@ export default function AdminPage() {
 
       <div className="px-[18px]">
         <Segmented
+          tone="dark"
           items={[
             { id: 'people', label: ui('admin.people') },
             { id: 'listings', label: ui('admin.listings') },

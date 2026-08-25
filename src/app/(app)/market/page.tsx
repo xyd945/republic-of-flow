@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Avatar, Icon, Chip, Button, Spinner, LoadError } from '@/components/ui';
+import { Avatar, Icon, Chip, Button, Spinner, LoadError, Segmented } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
 import { useListings, useMatches } from '@/lib/data/views';
 import {
@@ -10,27 +10,6 @@ import {
 } from '@/lib/data/mutations';
 import { createClient } from '@/lib/supabase/client';
 import type { ListingWithCreator, ListingInterest, MatchWithParties, Language } from '@/types';
-
-function Segmented({ items, value, onChange }: { items: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
-  return (
-    <div className="flex gap-0 rounded-xs overflow-hidden border border-line mb-4">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onChange(item.id)}
-          className="flex-1 py-[8px] border-none cursor-pointer font-display font-bold text-eyebrow tracking-[0.10em] uppercase transition-colors"
-          style={{
-            background: item.id === value ? 'var(--color-ink)' : 'transparent',
-            color: item.id === value ? '#fff' : 'var(--color-muted)',
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /** One incoming request, shown only to the listing owner. */
 function RequestRow({
@@ -454,6 +433,7 @@ function PublishModal({
         </div>
 
         <Segmented
+          className="mb-4"
           items={[
             { id: 'wanted', label: ui('market.wanted') },
             { id: 'offer', label: ui('market.offers') },
@@ -590,6 +570,7 @@ export default function MarketPage() {
       )}
 
       <Segmented
+        className="mb-4"
         items={[
           { id: 'wanted', label: ui('market.wanted') },
           { id: 'offer', label: ui('market.offers') },
