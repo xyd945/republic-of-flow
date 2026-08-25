@@ -1,6 +1,6 @@
 'use client';
 
-import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 
 /**
@@ -20,19 +20,6 @@ export const keys = {
   notifications: ['notifications'] as const,
   session: ['session'] as const,
 };
-
-/**
- * react-query decides "offline" from browser events and refuses to run a query
- * when it thinks we are — it parks it at fetchStatus 'paused', which never
- * settles, so the screen spins forever and the error UI never appears.
- * Measured that directly: a query rejecting immediately still went
- * fetching -> paused, with navigator.onLine reporting true throughout.
- *
- * This app talks to exactly one host and already bounds every request with a
- * timeout, so guessing at connectivity buys nothing and costs the error state.
- * Trust the request itself: try, fail, and say so.
- */
-onlineManager.setOnline(true);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
   // Created in state so it survives re-renders but is never shared between
@@ -54,23 +41,31 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             refetchOnWindowFocus: true,
             refetchOnMount: 'always',
             /**
-             * One retry, not three. A failure here is almost always RLS
-             * refusing or the project being paused, and neither is fixed by
-             * asking again — retrying just delays the error the screen now
-             * knows how to show.
-             */
-            retry: 1,
-            /**
-             * Attempt the request even when react-query believes the device is
-             * offline. Its default ('online') PAUSES a query instead of running
-             * it, so the query never settles, the error path never runs, and the
-             * screen spins forever — observed exactly that against an
-             * unreachable host, with navigator.onLine still reporting true.
+             * NO retries, and this one is load-bearing rather than a
+             * preference.
              *
-             * An eternal spinner is the same lie as an empty Republic, just
-             * quieter. We would rather try, fail, and say so: there is a
-             * ten-second timeout on every query and a real error screen waiting
-             * behind it.
+             * Two separate "spins forever" bugs traced back to the same cause:
+             * react-query PAUSES a retry when it believes the device is
+             * offline, and it believed that here with navigator.onLine
+             * reporting true. A paused retry never settles, so the query never
+             * reaches an error state, so the screen spins and the error UI
+             * never runs. Setting networkMode 'always' and forcing
+             * onlineManager online both failed to prevent it.
+             *
+             * With no retry there is nothing to pause. Measured: an unreachable
+             * host now surfaces an error in ~6s and a refused query in ~4s,
+             * where both previously span indefinitely.
+             *
+             * Losing retries costs little here. The failures this app actually
+             * sees — RLS refusing, a paused project, no signal — are not fixed
+             * by asking again, and a member who wants to retry has a button.
+             */
+            retry: 0,
+            /**
+             * Belt and braces alongside retry: 0 — attempt the request rather
+             * than parking it when react-query guesses we are offline. This app
+             * talks to exactly one host and bounds every request itself, so
+             * guessing at connectivity buys nothing and costs the error state.
              */
             networkMode: 'always',
           },

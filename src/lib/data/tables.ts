@@ -52,6 +52,19 @@ export type { ProfileRow, ListingRow };
  */
 const TIMEOUT_MS = 10_000;
 
+/**
+ * supabase-js catches a network failure and hands it back as
+ * `{ error: { message: 'TypeError: Failed to fetch' } }` rather than throwing,
+ * so it never reaches a `catch (e instanceof TypeError)`. True, and useless to
+ * a classmate on a train — the error screen shows this text verbatim.
+ */
+function humanise(message: string): string {
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return 'Could not reach the Republic. Check your connection.';
+  }
+  return message;
+}
+
 async function select<T>(
   build: (
     c: ReturnType<typeof createClient>,
@@ -62,11 +75,11 @@ async function select<T>(
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     const { data, error } = await build(createClient(), ctrl.signal);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(humanise(error.message));
     return data ?? [];
   } catch (e) {
     if (ctrl.signal.aborted) throw new Error('The Republic took too long to answer. Check your connection.');
-    throw e;
+    throw e instanceof Error ? new Error(humanise(e.message)) : e;
   } finally {
     clearTimeout(timer);
   }
