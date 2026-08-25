@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon } from '@/components/ui';
+import { Avatar, Icon, LoadError } from '@/components/ui';
 import { CATEGORY_COLORS } from '@/lib/seed';
 import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
-import { useDirectory } from '@/lib/supabase/directory';
+import { usePeople } from '@/lib/data/views';
 import { CLASSES } from '@/lib/classes';
 import type { CategoryId } from '@/types';
 
@@ -58,7 +58,7 @@ function Segmented({ items, value, onChange }: { items: { id: string; label: str
 export default function PeoplePage() {
   const router = useRouter();
   const { t, ui, lang } = useI18n();
-  const { profiles, loading } = useDirectory();
+  const { people: profiles, loading, error } = usePeople();
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('all');
   const [catFilter, setCatFilter] = useState<CategoryId | null>(null);
@@ -93,6 +93,8 @@ export default function PeoplePage() {
       </div>
     );
   }
+
+  if (error) return <LoadError message={error} onRetry={() => window.location.reload()} />;
 
   return (
     <div className="px-[18px] pt-[22px]">

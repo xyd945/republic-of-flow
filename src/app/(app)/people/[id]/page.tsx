@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Avatar, Polaroid, Icon, Chip, WaxSeal, Badge, Button } from '@/components/ui';
+import { Avatar, Polaroid, Icon, Chip, WaxSeal, Badge, Button, LoadError } from '@/components/ui';
 import { CATEGORY_COLORS } from '@/lib/seed';
 import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
-import { useDirectory } from '@/lib/supabase/directory';
+import { usePeople } from '@/lib/data/views';
 
 /**
  * Copy that also works on iOS.
@@ -64,7 +64,7 @@ export default function DossierPage() {
   const router = useRouter();
   const { t, ui, lang } = useI18n();
 
-  const { profiles, loading } = useDirectory();
+  const { people: profiles, loading, error } = usePeople();
   // Declared before the early returns below — hooks can't live after a branch.
   const [notice, setNotice] = useState('');
 
@@ -77,6 +77,8 @@ export default function DossierPage() {
       </div>
     );
   }
+
+  if (error) return <LoadError message={error} onRetry={() => window.location.reload()} />;
 
   const profile = profiles.find((p) => p.id === id);
   if (!profile) {

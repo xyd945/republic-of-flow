@@ -2,12 +2,12 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Avatar, Icon, Chip, WaxSeal } from '@/components/ui';
+import { Avatar, Icon, Chip, WaxSeal, LoadError } from '@/components/ui';
 import { CATEGORY_COLORS } from '@/lib/seed';
 import { CATEGORIES } from '@/lib/i18n/translations';
 import { useI18n } from '@/lib/i18n/context';
-import { useDirectory } from '@/lib/supabase/directory';
-import { useNotifications } from '@/lib/supabase/notifications';
+import { useListings, usePeople } from '@/lib/data/views';
+import { useNotifications } from '@/lib/data/notifications';
 import { NotificationPanel } from '@/components/notification-panel';
 
 function SectionHeading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
@@ -30,7 +30,8 @@ function greetingKey(hour: number) {
 export default function HomePage() {
   const router = useRouter();
   const { t, ui, lang } = useI18n();
-  const { profiles, listings, viewerProfileId, loading } = useDirectory();
+  const { listings, viewerProfileId, loading, error } = useListings();
+  const { people: profiles } = usePeople();
   const [shuffleIdx, setShuffleIdx] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifications = useNotifications();
@@ -77,6 +78,8 @@ export default function HomePage() {
       </div>
     );
   }
+
+  if (error) return <LoadError message={error} onRetry={() => window.location.reload()} />;
 
   const discoveryPerson = shuffled[0];
   const randomWorld = discoveryPerson?.hidden_worlds[0];
