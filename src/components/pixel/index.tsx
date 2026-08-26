@@ -418,6 +418,25 @@ export function EmptyState({
  * identity — the border colour is derived from the id so a given member always
  * reads the same, the way the old avatar did.
  */
+/**
+ * The type has to follow the box, not a token.
+ *
+ * This used to take --text-h3 for anything under 56px. That was fine when h3
+ * was 12px, but the scale was raised to 16px for the phone and two initials at
+ * 16px are about 33px wide — so every 28, 30 and 34px avatar in the app spilled
+ * its letters through its own frame. Seven of them.
+ *
+ * Whole pixels only, and each step leaves room for two characters plus the
+ * border: a bitmap face at a fractional size is mush.
+ */
+function initialsSize(box: number): number {
+  if (box >= 64) return 24;
+  if (box >= 48) return 20;
+  if (box >= 38) return 16;
+  if (box >= 30) return 12;
+  return 10;
+}
+
 export function Avatar({
   initials, id, size = 44, featured = false,
 }: { initials: string; id: string; size?: number; featured?: boolean }) {
@@ -432,7 +451,7 @@ export function Avatar({
       border: `var(--bw) solid ${featured ? 'var(--color-gold)' : 'var(--color-navy-900)'}`,
       boxShadow: featured ? 'inset 0 0 0 2px var(--color-gold)' : 'var(--shadow-px)',
       fontFamily: 'var(--font-display)', fontWeight: 700,
-      fontSize: size >= 56 ? 'var(--text-h2)' : 'var(--text-h3)', letterSpacing: '0.02em',
+      fontSize: initialsSize(size), letterSpacing: '0.02em',
     }}>{initials}</span>
   );
 }
@@ -632,7 +651,7 @@ export function Sheet({
             }}>X</button>
         </div>
 
-        <div style={{ padding: 16, overflowY: 'auto', display: 'grid', gap: 14 }}>{children}</div>
+        <div style={{ padding: 16, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 14 }}>{children}</div>
 
         {footer ? (
           <div style={{ padding: 14, borderTop: '3px solid var(--color-line)', flex: 'none' }}>{footer}</div>

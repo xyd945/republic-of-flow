@@ -433,7 +433,7 @@ export default function ProfilePage() {
       {/* identity */}
       <section>
         <SectionHeader icon="nav-journal" cn="身份" className="mb-3">{ui('profile.identity')}</SectionHeader>
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <Field label={ui('profile.full_name')} cn="姓名">
             <input className="rof-input" type="text" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
@@ -457,7 +457,7 @@ export default function ProfilePage() {
       {/* introduction */}
       <section>
         <SectionHeader icon="idea" cn="介绍" className="mb-3">{ui('profile.introduction')}</SectionHeader>
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <Field label={ui('profile.personal_intro')} cn="个人介绍">
             <textarea className="rof-input" rows={3} value={fields.intro} onChange={(e) => setField('intro', e.target.value)} placeholder={otherLang(profile.intro, lang)} />
           </Field>
@@ -473,7 +473,7 @@ export default function ProfilePage() {
           <Button tone="gold" size="sm" onClick={() => setShowAddWorld(true)}>+ {ui('profile.add')}</Button>
         }>{ui('profile.hidden_worlds')}</SectionHeader>
 
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8 }}>
           {worlds.map((w) => {
             const cat = CATEGORIES.find((c) => c.id === w.category);
             return (
@@ -508,7 +508,7 @@ export default function ProfilePage() {
 
         {showAddWorld && (
           <Panel pad={12} className="mt-3" innerRule={false}>
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
               <Field label={ui('profile.world_name')} cn="名称">
                 <input className="rof-input" type="text" value={newWorldName} onChange={(e) => setNewWorldName(e.target.value)} placeholder={ui('profile.world_placeholder')} />
               </Field>
@@ -563,7 +563,7 @@ export default function ProfilePage() {
       {/* contact */}
       <section>
         <SectionHeader icon="globe" cn="联系方式" className="mb-3">{ui('profile.contact_pref')}</SectionHeader>
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <Field label={ui('profile.method')} cn="方式">
             <select className="rof-input" value={contactKind} onChange={(e) => setContactKind(e.target.value as typeof contactKind)}>
               <option value="whatsapp">WhatsApp</option>

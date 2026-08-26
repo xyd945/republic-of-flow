@@ -89,7 +89,7 @@ export default function LoginPage() {
 
           <main data-scroll-region className="flex-1 overflow-y-auto no-scrollbar" style={{ padding: '20px 16px 24px', display: 'flex', flexDirection: 'column' }}>
             {step === 'email' ? (
-              <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 16 }}>
                 <div>
                   <Bi en={ui('auth.invitation_only')} zh="仅限受邀" color="var(--color-gold)" />
                   <p style={{ margin: '9px 0 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.65 }}>
@@ -117,7 +117,7 @@ export default function LoginPage() {
                 </Button>
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 16 }}>
                 <Panel pad={14} tone="gold" corners>
                   <div className="text-center">
                     <Bi en={ui('auth.check_email')} zh="查收邮件" color="var(--color-navy-900)" />

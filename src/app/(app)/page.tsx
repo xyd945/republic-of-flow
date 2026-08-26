@@ -91,7 +91,7 @@ export default function HomePage() {
               en="Someone here knows something you would never guess. Hidden World over resume."
               zh="这里总有人藏着你猜不到的东西。隐藏世界，胜过简历。" />
           </div>
-          <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 10, marginTop: 16 }}>
             <Button tone="primary" size="lg" block cn="发现成员" onClick={() => router.push('/people')}>Discover People</Button>
             <Button tone="secondary" size="lg" block cn="去市场" onClick={() => router.push('/market')}>Open the Market</Button>
           </div>
@@ -170,7 +170,7 @@ export default function HomePage() {
           }>
           Market
         </SectionHeader>
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           {[wanted, offer].filter(Boolean).map((l) => (
             <Panel key={l!.id} pad={13} ariaLabel={ui('market.title')}
                 onClick={() => router.push('/market')}>

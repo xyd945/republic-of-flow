@@ -106,7 +106,7 @@ export default function PeoplePage() {
       </div>
 
       {/* the roll */}
-      <div style={{ display: 'grid', gap: 11 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 11 }}>
         {filtered.map((p) => (
           <Panel key={p.id} pad={12} innerRule={false}
             ariaLabel={`${ui('dossier.title')} — ${p.full_name}`}
