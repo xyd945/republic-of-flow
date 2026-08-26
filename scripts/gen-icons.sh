@@ -10,9 +10,17 @@
 # sips ships with macOS, so this needs no image library.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-SRC=public/ds/logo/logo-mark.png
+SRC=public/ds/logo/logo-app.png
 
-[ -f "$SRC" ] || { echo "missing $SRC — drop the brand mark there first"; exit 1; }
+BRAND=public/ds/logo/logo-mark.png
+[ -f "$BRAND" ] || { echo "missing $BRAND — drop the brand mark there first"; exit 1; }
+# Rebuild the app master (navy ground) whenever the brand mark is newer.
+if [ ! -f "$SRC" ] || [ "$BRAND" -nt "$SRC" ]; then
+  TMP=$(mktemp -d)
+  sips -s format png -z 1024 1024 "$BRAND" --out "$TMP/m.png" >/dev/null
+  python3 scripts/make-app-mark.py "$TMP/m.png" "$SRC"
+  rm -rf "$TMP"
+fi
 tail -c 8 "$SRC" | xxd -p | grep -q '49454e44ae426082' \
   || { echo "$SRC is truncated (no IEND chunk) — get a complete copy"; exit 1; }
 
