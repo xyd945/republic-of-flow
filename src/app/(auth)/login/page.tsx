@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { WaxSeal, Wordmark, Button, Icon, LanguageSwitcher } from '@/components/ui';
 import { useI18n } from '@/lib/i18n/context';
-import { LANGUAGES } from '@/lib/i18n/translations';
+import { LangSwitch, StatusStrip } from '@/components/pixel/shell';
+import { Bi, Button, ErrorNote, Panel, Sprite } from '@/components/pixel';
 
 export default function LoginPage() {
   const [step, setStep] = useState<'email' | 'code'>('email');
@@ -53,107 +53,128 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-surface-page)', backgroundImage: 'radial-gradient(circle at 15% 4%, rgba(143,112,68,0.10), transparent 22%), linear-gradient(180deg, #f9f3e8 0%, #eee2cd 100%)' }}>
-      <div className="w-full max-w-[430px] min-h-screen flex flex-col" style={{ background: 'rgba(255,253,248,0.78)' }}>
-        {/* Crest header */}
-        <div className="pt-[52px] px-[26px] pb-6 text-center">
-          <div className="flex justify-end mb-2">
-            <LanguageSwitcher languages={LANGUAGES} value={lang} onChange={setLang} />
+    <div className="rof-frame">
+      <div className="rof-phone">
+        <div className="rof-screen">
+          <StatusStrip />
+
+          {/* The crest, on the Republic's own navy. This is the one screen with
+              room for the logo at a size where its pixels actually read. */}
+          <div style={{
+            background: 'var(--color-navy-900)', borderBottom: '3px solid var(--color-gold)',
+            padding: '22px 18px 20px', textAlign: 'center', position: 'relative', flex: 'none',
+          }}>
+            <div style={{ position: 'absolute', top: 10, right: 12 }}>
+              <LangSwitch lang={lang} onChange={setLang} />
+            </div>
+            {/* The real mark, on the navy-ground master so it sits flush on the
+                masthead rather than on a white tile. This was a drawn stand-in
+                while the brand mark could not be fetched whole. */}
+            <Sprite name="logo-flat" kind="logo" size={92} alt="" className="mx-auto" />
+            {/* Two lines on purpose: one line of this at h2 with display
+                tracking is wider than a 375px screen, and the frame clips it. */}
+            <h1 style={{
+              margin: '14px 0 0',
+              fontFamily: lang === 'zh' ? 'var(--font-cjk)' : 'var(--font-display)', fontWeight: 700,
+              fontSize: 'var(--text-h1)',
+              letterSpacing: lang === 'zh' ? 0 : 'var(--tracking-display)',
+              textTransform: lang === 'zh' ? 'none' : 'uppercase',
+              color: 'var(--color-gold)', lineHeight: 1.35,
+            }}>{lang === 'zh' ? '心流共和国' : <>Republic<br />of Flow</>}</h1>
+            <p style={{
+              margin: '10px auto 0', maxWidth: 280, fontSize: 'var(--text-small)',
+              color: 'rgba(245,237,216,0.72)', lineHeight: 1.6,
+            }}>{ui('auth.republic_desc')}</p>
           </div>
-          <WaxSeal size={72} label="R" className="mx-auto mb-5" />
-          <Wordmark size="lg" align="center" subtitle={ui('auth.republic_desc')} />
-        </div>
 
-        <div className="flex-1 px-[26px] pb-[26px] flex flex-col">
-          <div className="border-t border-line pt-[22px]">
+          <main data-scroll-region className="flex-1 overflow-y-auto no-scrollbar" style={{ padding: '20px 16px 24px', display: 'flex', flexDirection: 'column' }}>
             {step === 'email' ? (
-              <>
-                <div className="font-display font-bold text-eyebrow tracking-[0.14em] uppercase text-bronze mb-[10px]">
-                  {ui('auth.invitation_only')}
+              <div style={{ display: 'grid', gap: 16 }}>
+                <div>
+                  <Bi en={ui('auth.invitation_only')} zh="仅限受邀" color="var(--color-gold)" />
+                  <p style={{ margin: '9px 0 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.65 }}>
+                    {ui('auth.members_desc')}
+                  </p>
                 </div>
-                <p className="font-serif text-sm leading-[1.6] text-muted mb-[22px]">
-                  {ui('auth.members_desc')}
-                </p>
 
-                <label className="block">
-                  <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">
-                    {ui('auth.email')}
-                  </span>
+                <label style={{ display: 'block' }}>
+                  <div style={{ marginBottom: 6 }}><Bi en={ui('auth.email')} zh="邮箱" color="var(--color-gold)" /></div>
                   <input
+                    className="rof-input"
                     type="email"
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                    onKeyDown={(e) => e.key === 'Enter' && sendCode()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); sendCode(); } }}
                     placeholder="you@school.edu"
                     autoComplete="email"
-                    className="parch-input"
                   />
                 </label>
 
-                {error && (
-                  <div className="mt-[9px] flex items-center gap-[7px] font-serif text-xs text-red">
-                    <Icon name="x" size={14} color="var(--color-red)" />{error}
-                  </div>
-                )}
+                {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-                <div className="mt-5">
-                  <Button tone="ink" onClick={sendCode} loading={loading} icon={<Icon name="arrow-right" size={15} color="#fff" />}>
-                    {loading ? ui('auth.sending') : ui('auth.send_code')}
-                  </Button>
-                </div>
-
-              </>
+                <Button tone="dark" size="lg" block onClick={sendCode} loading={loading} disabled={loading}>
+                  {loading ? ui('auth.sending') : ui('auth.send_code')}
+                </Button>
+              </div>
             ) : (
-              <div className="text-center pt-2">
-                <div className="w-[58px] h-[58px] mx-auto mb-[18px] rounded-full grid place-items-center bg-green-wash" style={{ border: '1px solid rgba(70,90,73,0.3)' }}>
-                  <Icon name="check" size={24} color="var(--color-green)" />
-                </div>
-                <h3 className="font-serif font-semibold text-2xl text-ink mb-2">{ui('auth.check_email')}</h3>
-                <p className="font-serif text-sm leading-[1.6] text-muted max-w-[280px] mx-auto mb-4">
-                  {ui('auth.code_sent')} <strong className="text-ink">{email}</strong> {ui('auth.code_expires')}
-                </p>
+              <div style={{ display: 'grid', gap: 16 }}>
+                <Panel pad={14} tone="gold" corners>
+                  <div className="text-center">
+                    <Bi en={ui('auth.check_email')} zh="查收邮件" color="var(--color-navy-900)" />
+                    <p style={{ margin: '9px 0 0', fontSize: 'var(--text-body)', color: 'var(--color-ink-2)', lineHeight: 1.6 }}>
+                      {ui('auth.code_sent')}{' '}
+                      <strong style={{ color: 'var(--color-ink)', wordBreak: 'break-all' }}>{email}</strong>{' '}
+                      {ui('auth.code_expires')}
+                    </p>
+                  </div>
+                </Panel>
 
-                <label className="block text-left mb-4">
-                  <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze mb-[7px] block">
-                    {ui('auth.verification_code')}
-                  </span>
+                <label style={{ display: 'block' }}>
+                  <div style={{ marginBottom: 6 }}><Bi en={ui('auth.verification_code')} zh="验证码" color="var(--color-gold)" /></div>
+                  {/* A fixed 16px, not a scaled one: the display face is a
+                      bitmap and any fractional size puts it off the pixel grid. */}
                   <input
+                    className="rof-input"
                     type="text"
                     inputMode="numeric"
                     maxLength={6}
                     value={code}
                     onChange={(e) => { setCode(e.target.value.replace(/\D/g, '')); setError(''); }}
-                    onKeyDown={(e) => e.key === 'Enter' && verifyCode()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); verifyCode(); } }}
                     placeholder="000000"
                     autoComplete="one-time-code"
-                    className="parch-input text-center text-2xl tracking-[0.3em] font-serif"
+                    style={{
+                      textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700,
+                      fontSize: 16, letterSpacing: '0.34em', textIndent: '0.34em',
+                    }}
                   />
                 </label>
 
-                {error && (
-                  <div className="mb-3 flex items-center justify-center gap-[7px] font-serif text-xs text-red">
-                    <Icon name="x" size={14} color="var(--color-red)" />{error}
-                  </div>
-                )}
+                {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-                <Button tone="bronze" onClick={verifyCode} loading={loading} icon={<Icon name="arrow-right" size={15} color="var(--color-dark)" />}>
+                <Button tone="gold" size="lg" block onClick={verifyCode} loading={loading} disabled={loading}>
                   {loading ? ui('auth.verifying') : ui('auth.verify')}
                 </Button>
 
                 <button
                   type="button"
                   onClick={() => { setStep('email'); setCode(''); setError(''); }}
-                  className="mt-4 border-none bg-transparent cursor-pointer font-serif text-xs text-muted underline underline-offset-[3px]"
-                >
-                  {ui('auth.different_email')}
-                </button>
+                  className="rof-label"
+                  style={{
+                    background: 'transparent', border: 'none', borderRadius: 0, cursor: 'pointer',
+                    color: 'var(--color-muted)', textDecoration: 'underline', textUnderlineOffset: 3,
+                    justifySelf: 'center', padding: 4,
+                  }}
+                >{ui('auth.different_email')}</button>
               </div>
             )}
-          </div>
 
-          <div className="mt-auto pt-[26px] text-center font-serif italic text-xs text-faint leading-[1.6]">
-            {ui('auth.tagline')}
-          </div>
+            {/* Pushed to the foot of the scroll region, and allowed to fold:
+                the tagline is a sentence, not a label. */}
+            <div className="text-center" style={{ marginTop: 'auto', paddingTop: 26 }}>
+              <Bi en={ui('auth.tagline')} color="var(--color-faint)" wrap />
+            </div>
+          </main>
         </div>
       </div>
     </div>

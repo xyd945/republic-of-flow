@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Icon } from '@/components/ui';
+import { Bi, ErrorNote, PixelSpinner } from '@/components/pixel';
+import { useOverlay } from '@/components/pixel/overlay';
 import { useI18n } from '@/lib/i18n/context';
 import { t } from '@/lib/i18n/translations';
 import type { AppNotification, Language } from '@/types';
@@ -31,14 +31,24 @@ function line(n: AppNotification, lang: Language, ui: (k: string) => string): st
   return ui(`notif.${n.kind}`).replace('{name}', name).replace('{listing}', listing);
 }
 
-function iconFor(kind: AppNotification['kind']): { name: string; color: string } {
+/**
+ * The bitmap system has no icon font, and a 22px glyph carries further than a
+ * hairline SVG at this size anyway. Colour does the categorising; the glyph
+ * only has to be distinguishable at a glance.
+ */
+function markFor(kind: AppNotification['kind']): { glyph: string; bg: string; bd: string; fg: string } {
   switch (kind) {
-    case 'interest_accepted': return { name: 'check', color: 'var(--color-green)' };
-    case 'interest_declined': return { name: 'x', color: 'var(--color-faint)' };
-    case 'match_undone':      return { name: 'x', color: 'var(--color-red)' };
-    case 'match_met':         return { name: 'check', color: 'var(--color-green)' };
-    case 'suggestion_made':   return { name: 'star', color: 'var(--color-bronze)' };
-    default:                  return { name: 'bell', color: 'var(--color-bronze)' };
+    case 'interest_accepted':
+    case 'match_met':
+      return { glyph: 'Y', bg: 'var(--color-sage-tint)', bd: 'var(--color-sage)', fg: '#3F5742' };
+    case 'interest_declined':
+      return { glyph: 'N', bg: 'var(--color-slate-tint)', bd: 'var(--color-slate)', fg: 'var(--color-slate)' };
+    case 'match_undone':
+      return { glyph: '!', bg: 'var(--color-red-tint)', bd: 'var(--color-red)', fg: '#6E2A20' };
+    case 'suggestion_made':
+      return { glyph: '*', bg: 'var(--color-gold-tint)', bd: 'var(--color-gold)', fg: '#6B5223' };
+    default:
+      return { glyph: '!', bg: 'var(--color-gold-tint)', bd: 'var(--color-gold)', fg: '#6B5223' };
   }
 }
 
@@ -53,17 +63,9 @@ export function NotificationPanel({
   const router = useRouter();
   const { lang, ui } = useI18n();
 
-  // Escape closes, and the page behind must not scroll while this is open.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
+  // Escape closes and the page behind is locked — both through the shared
+  // registry, so a second open layer cannot corrupt the restore.
+  useOverlay(onClose);
 
   // Every kind of notification is about something in the Market, so they all
   // land there. The Market's tabs are component state rather than URL state,
@@ -74,64 +76,80 @@ export function NotificationPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center" role="dialog" aria-modal="true" aria-label={ui('notif.title')}>
-      <button
-        type="button"
-        aria-label={ui('notif.close')}
-        onClick={onClose}
-        className="absolute inset-0 bg-ink/25 border-none cursor-pointer p-0"
-      />
-      <div className="relative w-full max-w-[430px] mt-[64px] mx-[18px] mb-auto rounded-xs border border-line bg-white shadow-lg overflow-hidden">
-        <div className="flex items-center justify-between px-[14px] py-[11px] border-b border-line">
-          <span className="font-display font-bold text-eyebrow tracking-[0.13em] uppercase text-bronze">
-            {ui('notif.title')}
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={ui('notif.close')}
-            className="w-7 h-7 grid place-items-center rounded-full bg-transparent border border-line cursor-pointer"
-          >
-            <Icon name="x" size={12} color="var(--color-faint)" />
-          </button>
+    <div role="dialog" aria-modal="true" aria-label={ui('notif.title')}
+      style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'center' }}>
+      <button type="button" aria-label={ui('common.close')} onClick={onClose}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(15,30,52,0.55)', border: 'none', borderRadius: 0, cursor: 'pointer', padding: 0 }} />
+
+      <div style={{
+        position: 'relative', width: '100%', maxWidth: 430, margin: '58px 14px auto',
+        background: 'var(--color-card)', border: 'var(--bw) solid var(--color-navy-900)',
+        borderRadius: 0, boxShadow: 'var(--shadow-px)', overflow: 'hidden',
+        display: 'flex', flexDirection: 'column', maxHeight: '70vh',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          padding: '11px 13px', background: 'var(--color-navy-900)',
+          borderBottom: '3px solid var(--color-gold)', flex: 'none',
+        }}>
+          <Bi en={ui('notif.title')} zh="通知" color="var(--color-gold)" size="var(--text-h3)" />
+          <button type="button" onClick={onClose} aria-label={ui('common.close')}
+            style={{
+              width: 44, height: 44, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
+              background: 'transparent', border: '2px solid var(--color-gold)', borderRadius: 0,
+              color: 'var(--color-gold)', fontFamily: 'var(--font-display)', fontWeight: 700,
+              fontSize: 'var(--text-small)', lineHeight: 1,
+            }}>X</button>
         </div>
 
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div style={{ overflowY: 'auto' }}>
           {error && (
-            <div className="flex items-center gap-[7px] px-[14px] py-[12px] font-serif text-xs text-red">
-              <Icon name="x" size={13} color="var(--color-red)" />{error}
-            </div>
+            <div style={{ padding: 13 }}><ErrorNote>{error}</ErrorNote></div>
           )}
 
           {!error && loading && (
-            <div className="px-[14px] py-[18px] text-center">
-              <div className="w-5 h-5 mx-auto border-2 border-bronze border-t-transparent rounded-full animate-spin" />
+            <div style={{ padding: '20px 13px', textAlign: 'center' }}>
+              <PixelSpinner size={14} color="var(--color-gold)" />
             </div>
           )}
 
           {!error && !loading && items.length === 0 && (
-            <div className="px-[14px] py-[22px] text-center font-serif text-xs text-faint italic">
-              {ui('notif.empty')}
+            <div style={{ padding: '22px 13px', textAlign: 'center' }}>
+              <Bi en={ui('notif.empty')} zh="暂无通知" color="var(--color-faint)" />
             </div>
           )}
 
-          {!error && !loading && items.map((n) => {
-            const icon = iconFor(n.kind);
+          {!error && !loading && items.map((n, idx) => {
+            const mark = markFor(n.kind);
             return (
               <button
                 key={n.id}
                 type="button"
                 onClick={goTo}
-                className={`flex w-full items-start gap-[10px] px-[14px] py-[11px] border-b border-line last:border-b-0 cursor-pointer text-left ${n.read_at ? 'bg-transparent' : 'bg-bronze-wash'}`}
+                style={{
+                  display: 'flex', width: '100%', alignItems: 'flex-start', gap: 10,
+                  padding: '11px 13px', textAlign: 'left', cursor: 'pointer',
+                  border: 'none', borderRadius: 0,
+                  borderTop: idx === 0 ? 'none' : '2px solid var(--color-line)',
+                  background: n.read_at ? 'transparent' : 'var(--color-gold-tint)',
+                }}
               >
-                <span className="w-6 h-6 mt-[1px] grid place-items-center rounded-full border border-line shrink-0">
-                  <Icon name={icon.name} size={11} color={icon.color} />
+                <span aria-hidden style={{
+                  width: 22, height: 22, flex: 'none', display: 'grid', placeItems: 'center',
+                  background: mark.bg, border: `2px solid ${mark.bd}`, color: mark.fg,
+                  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-small)', lineHeight: 1,
+                }}>{mark.glyph}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 'var(--text-body)', color: 'var(--color-ink)', lineHeight: 1.45 }}>
+                    {line(n, lang, ui)}
+                  </span>
+                  <span className="rof-label" style={{ display: 'block', color: 'var(--color-faint)', marginTop: 4 }}>
+                    {ago(n.created_at, ui)}
+                  </span>
                 </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block font-serif text-xs text-ink leading-[1.45]">{line(n, lang, ui)}</span>
-                  <span className="block font-serif text-eyebrow text-faint mt-[3px]">{ago(n.created_at, ui)}</span>
-                </span>
-                {!n.read_at && <span className="w-[6px] h-[6px] mt-[7px] rounded-full bg-bronze shrink-0" />}
+                {!n.read_at && (
+                  <span aria-hidden style={{ width: 7, height: 7, marginTop: 7, flex: 'none', background: 'var(--color-red)', display: 'block' }} />
+                )}
               </button>
             );
           })}

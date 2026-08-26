@@ -1,246 +1,325 @@
 @import "tailwindcss";
 
+/* ===========================================================================
+   Republic of FLOW — pixel design system
+   Ported from the MVP v1 hi-fi (claude.ai/design project f3ca7979).
+
+   The whole system rests on a few rules, and breaking any one of them is what
+   makes pixel art look wrong:
+
+     · square corners, always — there is no radius token
+     · hard 2px borders, never hairlines
+     · offset shadows with ZERO blur
+     · stepped motion, never eased
+     · bitmap faces rendered ONLY at 8/10/12/16/24/32px — a fractional size
+       lands the glyph off the pixel grid and it turns to mush
+     · every sprite gets image-rendering: pixelated
+
+   Replaces the parchment/serif system this app shipped with.
+   =========================================================================== */
+
 @theme {
-  /* ---- Parchment surfaces ---- */
-  --color-paper-0: #fbf6ec;
-  --color-paper-1: #f3ead9;
-  --color-paper-2: #e9dcc2;
-  --color-paper-3: #e5d3b6;
-  --color-paper-edge: #d8c4a1;
-  --color-white: #fffdf8;
+  /* ---- Core palette (exact hexes from the style guide) ---- */
+  --color-navy-900: #0F1E34;
+  --color-navy-700: #1E3556;
+  --color-gold: #C9A66B;
+  --color-parchment: #EAD7B0;
+  --color-brown: #7A5B2E;
+  --color-sage: #8FA98C;
+  --color-red: #9C3B2E;
+  --color-slate: #5C6A7A;
+  --color-mist: #DCE3EA;
 
-  /* ---- Ink (text) ---- */
-  --color-ink: #1f1a15;
-  --color-ink-2: #3a332a;
-  --color-muted: #6b6258;
-  --color-faint: #8a8072;
+  /* ---- Surfaces ---- */
+  --color-cream: #FAF0DB;
+  --color-card: #FDF8EC;
+  --color-card-warm: #FDF5E3;
+  --color-white: #FFFFFF;
 
-  /* ---- Rules & hairlines ---- */
-  --color-line: #cdbda2;
-  --color-line-soft: rgba(132, 105, 69, 0.20);
-  --color-line-dashed: #b4a083;
+  /* ---- Ink & lines ---- */
+  --color-ink: #0F1E34;
+  --color-ink-2: #2A3D5C;
+  --color-muted: #5C6A7A;
+  --color-faint: #8A93A0;
+  --color-line: #C9A66B;
+  --color-line-navy: #0F1E34;
+  --color-line-soft: #D9C9A5;
 
-  /* ---- Bronze ---- */
-  --color-bronze: #8f7044;
-  --color-bronze-deep: #6f552f;
-  --color-bronze-light: #b49562;
-  --color-bronze-wash: #efe4d1;
+  /* ---- Tints (chip / label fills) ---- */
+  --color-gold-tint: #F2E4C6;
+  --color-sage-tint: #DFE8D9;
+  --color-red-tint: #F0DBD5;
+  --color-mist-tint: #E9EEF3;
+  --color-brown-tint: #E8DCC4;
+  --color-slate-tint: #E1E5EA;
 
-  /* ---- Guild / semantic ---- */
-  --color-red: #8a3a32;
-  --color-red-deep: #6f2b25;
-  --color-red-wash: #f1ded9;
-  --color-green: #465a49;
-  --color-green-wash: #e1e8df;
-  --color-blue: #405069;
-  --color-blue-wash: #dfe4ea;
+  /* ---- On-colour text ---- */
+  --color-on-navy: #F5EDD8;
+  --color-on-gold: #0F1E34;
 
-  /* ---- Dark stage ---- */
-  --color-dark: #171512;
-  --color-dark-2: #2c271f;
-  --color-dark-line: #625743;
-  --color-dark-paper: #f7edda;
-  --color-dark-muted: #ccb997;
+  /* ---- Category colours, mapped to our six Hidden World categories ----
+     The design ships "guild" colours; ours are craft/nature/mind/build/
+     money/art, so they are matched to the nearest guild hue rather than
+     invented. */
+  --color-cat-craft: #7A5B2E;
+  --color-cat-nature: #8FA98C;
+  --color-cat-mind: #1E3556;
+  --color-cat-build: #5C6A7A;
+  --color-cat-money: #C9A66B;
+  --color-cat-art: #9C3B2E;
 
-  /* ---- Semantic surfaces ---- */
-  --color-surface-page: #ede1cb;
-  --color-surface-card: #fffdf8;
-  --color-surface-panel: #e9dcc2;
-  --color-surface-sunk: #efe2ca;
-  --color-surface-dark: #171512;
+  /* ---- Type ---- */
+  --font-display: 'Silkscreen', 'Press Start 2P', monospace;
+  --font-body: 'Pixelify Sans', 'Silkscreen', monospace;
+  --font-cjk: 'DotGothic16', 'Pixelify Sans', sans-serif;
+  --font-hero: 'Press Start 2P', 'Silkscreen', monospace;
 
-  /* ---- Fonts ----
-     Latin face first, then Noto Serif SC so CJK glyphs resolve to a matching
-     serif instead of an arbitrary system fallback. Cinzel and Caveat carry no
-     Chinese at all, so their stacks must fall through too. */
-  --font-display: var(--font-cinzel), var(--font-noto-sc), "Songti SC", Georgia, serif;
-  --font-serif: var(--font-garamond), var(--font-noto-sc), "Songti SC", Georgia, serif;
-  --font-cjk: var(--font-noto-sc), "Songti SC", "STSong", serif;
-  --font-hand: var(--font-caveat), var(--font-noto-sc), cursive;
+  /* Integer sizes only. Named to match the design's scale. */
+  --text-hero: 40px;
+  --text-h1: 28px;
+  --text-h2: 20px;
+  --text-h3: 16px;
+  --text-body: 14px;
+  --text-small: 12px;
+  /* The source style guide's sizes (24/16/12/10/8) were drawn for a 1440px
+     desktop mock and are unreadable on a phone. The scale is stepped up ~40%
+     for the mobile-first product; ratios and hierarchy are unchanged. Whole
+     pixels only — a bitmap face scaled fractionally turns to mush. */
+  --text-micro: 10px;
 
-  /* ---- Type scale ----
-     Seven steps. Everything in the UI must land on one of these — no
-     half-pixel one-offs. `eyebrow` is the uppercase tracked label tier. */
-  --text-eyebrow: 0.625rem;  /* 10px */
-  --text-xs: 0.75rem;        /* 12px */
-  --text-sm: 0.8125rem;      /* 13px */
-  --text-base: 0.9375rem;    /* 15px */
-  --text-lg: 1.0625rem;      /* 17px */
-  --text-xl: 1.25rem;        /* 20px */
-  --text-2xl: 1.5rem;        /* 24px */
+  --tracking-display: 0.04em;
+  --tracking-label: 0.08em;
+  --tracking-nav: 0.06em;
 
-  /* ---- Spacing ---- */
-  --spacing-gutter: 18px;
+  /* ---- Spacing grid ---- */
+  --spacing-px2: 2px;
 
-  /* ---- Radii ---- */
-  --radius-xs: 8px;
-  --radius-sm: 12px;
-  --radius-md: 13px;
-  --radius-lg: 18px;
-  --radius-xl: 20px;
-
-  /* ---- Shadows ---- */
-  --shadow-sm: 0 4px 12px rgba(63, 45, 23, 0.07);
-  --shadow-md: 0 14px 34px rgba(63, 45, 23, 0.10);
-  --shadow-lg: 0 22px 50px rgba(63, 45, 23, 0.16);
-
-  /* ---- Animation ---- */
-  --ease-quiet: cubic-bezier(0.2, 0.6, 0.2, 1);
-  --animate-fade: rofFade 0.2s ease;
-  --animate-sheet: rofSheet 0.28s var(--ease-quiet);
+  /* ---- Motion: stepped, never smooth ---- */
+  --ease-step: steps(3, end);
+  --ease-snap: steps(2, end);
 }
 
-@keyframes rofFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+
+/* ---------------------------------------------------------------------------
+   The same tokens again, declared plainly.
+
+   Tailwind v4 PRUNES @theme variables it cannot see referenced in CSS. Our
+   components consume most tokens through inline `style={{...}}` in TSX, which
+   Tailwind never scans — so the category colours silently resolved to nothing
+   and every Hidden World dot rendered transparent. @theme above still earns
+   its keep by generating utilities; this block guarantees the variables exist
+   whether or not a utility happens to use them.
+   --------------------------------------------------------------------------- */
+:root {
+  --color-navy-900: #0F1E34;
+  --color-navy-700: #1E3556;
+  --color-gold: #C9A66B;
+  --color-parchment: #EAD7B0;
+  --color-brown: #7A5B2E;
+  --color-sage: #8FA98C;
+  --color-red: #9C3B2E;
+  --color-slate: #5C6A7A;
+  --color-mist: #DCE3EA;
+
+  --color-cream: #FAF0DB;
+  --color-card: #FDF8EC;
+  --color-card-warm: #FDF5E3;
+  --color-white: #FFFFFF;
+
+  --color-ink: #0F1E34;
+  --color-ink-2: #2A3D5C;
+  --color-muted: #5C6A7A;
+  --color-faint: #8A93A0;
+  --color-line: #C9A66B;
+  --color-line-navy: #0F1E34;
+  --color-line-soft: #D9C9A5;
+
+  --color-gold-tint: #F2E4C6;
+  --color-sage-tint: #DFE8D9;
+  --color-red-tint: #F0DBD5;
+  --color-mist-tint: #E9EEF3;
+  --color-brown-tint: #E8DCC4;
+  --color-slate-tint: #E1E5EA;
+
+  --color-on-navy: #F5EDD8;
+  --color-on-gold: #0F1E34;
+
+  --color-cat-craft: #7A5B2E;
+  --color-cat-nature: #8FA98C;
+  --color-cat-mind: #1E3556;
+  --color-cat-build: #5C6A7A;
+  --color-cat-money: #C9A66B;
+  --color-cat-art: #9C3B2E;
+
+  --font-display: 'Silkscreen', 'Press Start 2P', monospace;
+  --font-body: 'Pixelify Sans', 'Silkscreen', monospace;
+  --font-cjk: 'DotGothic16', 'Pixelify Sans', sans-serif;
+  --font-hero: 'Press Start 2P', 'Silkscreen', monospace;
+
+  --text-hero: 40px;
+  --text-h1: 28px;
+  --text-h2: 20px;
+  --text-h3: 16px;
+  --text-body: 14px;
+  --text-small: 12px;
+  /* The source style guide's sizes (24/16/12/10/8) were drawn for a 1440px
+     desktop mock and are unreadable on a phone. The scale is stepped up ~40%
+     for the mobile-first product; ratios and hierarchy are unchanged. Whole
+     pixels only — a bitmap face scaled fractionally turns to mush. */
+  --text-micro: 10px;
+
+  --tracking-display: 0.04em;
+  --tracking-label: 0.08em;
+  --tracking-nav: 0.06em;
+
+  --ease-step: steps(3, end);
+  --ease-snap: steps(2, end);
+
+  /* Non-colour tokens Tailwind does not generate utilities for. */
+  --bw: 2px;
+  --bw-thick: 3px;
+  --shadow-px: 3px 3px 0 rgba(15, 30, 52, 0.20);
+  --shadow-px-lg: 5px 5px 0 rgba(15, 30, 52, 0.25);
+  --shadow-press: 1px 1px 0 rgba(15, 30, 52, 0.20);
+  --dur-fast: 90ms;
+  --dur: 150ms;
 }
 
-@keyframes rofSheet {
-  from { transform: translateY(28px); }
-  to { transform: translateY(0); }
-}
-
-/* ---- Base resets ---- */
 html, body {
   margin: 0;
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
-  font-family: var(--font-serif);
+  background: var(--color-navy-900);
   color: var(--color-ink);
-  background: var(--color-surface-page);
-  background-image:
-    radial-gradient(circle at 15% 4%, rgba(143, 112, 68, 0.10), transparent 22%),
-    linear-gradient(180deg, #f9f3e8 0%, #eee2cd 100%);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  /* Pixel art must not be smoothed anywhere. */
+  -webkit-font-smoothing: none;
+  font-smooth: never;
 }
 
-/* ---- Scrollbar ---- */
+::selection {
+  background: var(--color-gold);
+  color: var(--color-navy-900);
+}
+
+/* Every sprite, everywhere. */
+.pixel,
+img.pixel {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
 .no-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
 .no-scrollbar { scrollbar-width: none; }
 
-/* ---- Sheet: aged paper card ---- */
-.sheet {
+/* ---------------------------------------------------------------------------
+   The phone frame.
+
+   The design presents every screen inside a gold-bordered handset on a navy
+   field. On a real phone that chrome would be wasted space, so below 470px it
+   drops away entirely and the screen becomes the viewport — which is how our
+   members will actually see it.
+   --------------------------------------------------------------------------- */
+.rof-frame {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 28px 16px 40px;
+  background: #0B1424;
+}
+
+.rof-phone {
+  width: 414px;
+  flex: none;
+  background: var(--color-navy-900);
+  border: var(--bw-thick) solid var(--color-gold);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.45);
+  padding: 8px;
+}
+
+.rof-screen {
   position: relative;
-  border-radius: 3px;
-  background:
-    radial-gradient(circle at 20% 16%, rgba(150, 108, 46, 0.13), transparent 26%),
-    radial-gradient(circle at 84% 24%, rgba(120, 82, 34, 0.11), transparent 24%),
-    radial-gradient(circle at 66% 86%, rgba(140, 98, 42, 0.12), transparent 28%),
-    radial-gradient(125% 120% at 50% -8%, #fbf1da 0%, #f4e6c6 46%, #ecdcb6 78%, #e2cfa4 100%);
-  border: 1px solid #c2a570;
-  box-shadow: 0 1px 1px rgba(40, 26, 8, 0.16), 0 16px 30px rgba(24, 14, 3, 0.34),
-    inset 0 0 1px rgba(120, 78, 26, 0.55);
-}
-.sheet > * { position: relative; z-index: 2; }
-.sheet::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 1;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='170' height='170'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>");
-  background-size: 170px 170px;
-  opacity: 0.2;
-  mix-blend-mode: multiply;
-}
-.sheet::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 1;
-  box-shadow: inset 0 0 22px rgba(120, 74, 22, 0.2), inset 0 0 52px rgba(120, 74, 22, 0.12);
-  background: radial-gradient(140% 130% at 50% 44%, transparent 54%, rgba(120, 74, 22, 0.18) 100%);
+  width: 100%;
+  /* A fixed height, not a minimum: the tab bar is a flex sibling of <main>,
+     so if this box is allowed to grow with its content the bar rides to the
+     bottom of the document instead of staying pinned, and <main>'s own
+     overflow-y never engages because it is never actually constrained. */
+  height: 820px;
+  background: var(--color-cream);
+  border: var(--bw) solid var(--color-navy-900);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* ---- Sheet dark variant ---- */
-.sheet-dark {
-  position: relative;
-  border-radius: 3px;
-  background: linear-gradient(158deg, #292014, #171009);
-  border: 1px solid #4a3c26;
-  box-shadow: 0 16px 34px rgba(8, 4, 1, 0.55), inset 0 1px 0 rgba(180, 149, 98, 0.16);
+@media (max-width: 470px) {
+  .rof-frame { padding: 0; }
+  .rof-phone { width: 100vw; border: none; padding: 0; box-shadow: none; }
+  /* dvh, not vh: mobile Safari counts its collapsing toolbars in vh, which
+     would hide the tab bar behind the browser chrome on first paint. */
+  .rof-screen { height: 100vh; height: 100dvh; border: none; }
 }
 
-/* ---- Stacked paper ---- */
-.stack { position: relative; }
-.stack::before, .stack::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 3px;
-  background: #e2cfa4;
-  border: 1px solid #c2a570;
-  box-shadow: 0 8px 16px rgba(24, 14, 3, 0.26);
-  z-index: -1;
-}
-.stack::before { transform: rotate(-1.8deg) translate(-4px, 5px); }
-.stack::after { transform: rotate(1.5deg) translate(5px, 3px); background: #dcc79b; }
+/* ---------------------------------------------------------------------------
+   Primitives used often enough to earn a class.
+   --------------------------------------------------------------------------- */
 
-/* ---- Tape strip ---- */
-.tape {
-  position: absolute;
-  width: 74px;
-  height: 26px;
-  z-index: 5;
-  background: linear-gradient(180deg, rgba(224, 210, 172, 0.8), rgba(198, 178, 134, 0.66));
-  box-shadow: 0 1px 3px rgba(63, 45, 23, 0.22);
-  border-left: 1px dashed rgba(120, 99, 70, 0.32);
-  border-right: 1px dashed rgba(120, 99, 70, 0.32);
+/* Caps label in the display face — the system's workhorse. */
+.rof-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-small);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  line-height: 1;
 }
 
-/* ---- Parchment input ---- */
-.parch-input {
+/* 中文 never takes the display face — bitmap caps have no CJK coverage. */
+.rof-cjk {
+  font-family: var(--font-cjk);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.rof-input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #bfa268;
-  border-radius: 3px;
-  background: #f6ead0;
-  padding: 11px 12px;
-  font-family: var(--font-serif);
-  font-size: 13.5px;
+  background: var(--color-white);
+  border: var(--bw) solid var(--color-navy-900);
+  border-radius: 0;
+  padding: 12px 10px;
+  font-family: var(--font-body);
+  font-size: var(--text-h3);
   color: var(--color-ink);
   outline: none;
-  box-shadow: inset 0 1px 3px rgba(90, 58, 18, 0.14);
+  box-shadow: var(--shadow-px);
+  min-height: 44px;
 }
-.parch-input:focus { border-color: var(--color-bronze); }
-.parch-input::placeholder { color: var(--color-faint); }
+.rof-input:focus { border-color: var(--color-gold); }
+.rof-input::placeholder { color: var(--color-faint); }
 
-textarea.parch-input { resize: none; line-height: 1.55; }
-
-select.parch-input {
-  appearance: none;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b6258'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
-}
-
-/* ---- Toast ---- */
-.toast {
+/* Toast: navy plate, gold rule, stepped fade. */
+.rof-toast {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%) translateY(-8px);
-  top: 80px;
-  z-index: 60;
-  max-width: 380px;
-  width: calc(100% - 48px);
-  padding: 11px 14px;
-  border-radius: 12px;
-  background: var(--color-ink);
-  color: var(--color-white);
-  font-family: var(--font-serif);
-  font-size: 12.5px;
-  box-shadow: var(--shadow-lg);
-  opacity: 0;
-  transition: all 0.28s var(--ease-quiet);
-  pointer-events: none;
+  transform: translateX(-50%);
+  bottom: 84px;
+  z-index: 70;
+  width: calc(100% - 28px);
+  max-width: 386px;
+  padding: 9px 12px;
+  background: var(--color-navy-900);
+  color: var(--color-gold);
+  border: var(--bw) solid var(--color-gold);
   text-align: center;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-snap);
+  pointer-events: none;
 }
-.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.rof-toast.on { opacity: 1; }
