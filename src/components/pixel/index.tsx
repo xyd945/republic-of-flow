@@ -184,12 +184,14 @@ const BUTTON_TONES = {
   secondary: { bg: 'var(--color-card)', fg: 'var(--color-navy-900)', bd: 'var(--color-navy-900)' },
 } as const;
 
-/* 44px minimum on every size. The design calls this out explicitly: the old
-   bare text buttons were unreadable and hard to hit on a phone. */
+/* Straight from the design system. The padding sets the height — there is no
+   minHeight here on purpose. (44px minimums belong to inputs, icon buttons and
+   SecAction, which the design sizes explicitly; adding them to Button made
+   every button in the app taller than the design draws it.) */
 const BUTTON_SIZES = {
-  lg: { pad: '12px 24px', fs: 'var(--text-h3)', gap: 10, min: 48 },
-  md: { pad: '10px 16px', fs: 'var(--text-body)', gap: 8, min: 44 },
-  sm: { pad: '8px 12px', fs: 'var(--text-small)', gap: 6, min: 36 },
+  lg: { pad: '12px 24px', fs: 'var(--text-body)', gap: 10 },
+  md: { pad: '10px 16px', fs: 'var(--text-body)', gap: 8 },
+  sm: { pad: '6px 12px', fs: 'var(--text-small)', gap: 6 },
 } as const;
 
 export type ButtonTone = keyof typeof BUTTON_TONES;
@@ -239,7 +241,7 @@ export function Button({
         alignItems: 'center', justifyContent: 'center', gap: s.gap,
         fontFamily: cjk ? 'var(--font-cjk)' : 'var(--font-display)', fontWeight: 700, fontSize: s.fs,
         letterSpacing: cjk ? 0 : 'var(--tracking-label)', textTransform: cjk ? 'none' : 'uppercase',
-        padding: s.pad, borderRadius: 0, lineHeight: 1, minHeight: s.min,
+        padding: s.pad, borderRadius: 0, lineHeight: 1,
         background: off_ ? 'var(--color-slate-tint)' : t.bg,
         color: off_ ? 'var(--color-faint)' : t.fg,
         border: `var(--bw) solid ${off_ ? 'var(--color-slate)' : hover ? 'var(--color-gold)' : t.bd}`,
@@ -273,30 +275,38 @@ export function PixelSpinner({ size = 10, color = 'currentColor' }: { size?: num
 
 /* ------------------------------------------------------------------ chips */
 
+/* The design system's own STATE map, dot colours included. */
 const STATUS_TONES = {
-  open: { bg: 'var(--color-sage-tint)', fg: '#3F5742', bd: 'var(--color-sage)' },
-  matched: { bg: 'var(--color-gold-tint)', fg: '#6B5223', bd: 'var(--color-gold)' },
-  closed: { bg: 'var(--color-slate-tint)', fg: 'var(--color-slate)', bd: 'var(--color-slate)' },
-  hot: { bg: 'var(--color-red-tint)', fg: '#6E2A20', bd: 'var(--color-red)' },
-  wanted: { bg: 'var(--color-red-tint)', fg: '#6E2A20', bd: 'var(--color-red)' },
-  offer: { bg: 'var(--color-sage-tint)', fg: '#3F5742', bd: 'var(--color-sage)' },
-  neutral: { bg: 'var(--color-mist-tint)', fg: 'var(--color-slate)', bd: 'var(--color-slate)' },
+  open:      { bg: 'var(--color-sage-tint)',  fg: '#3E5A42',            bd: 'var(--color-sage)',     dot: '#4A6B4E' },
+  active:    { bg: 'var(--color-mist-tint)',  fg: 'var(--color-navy-900)', bd: 'var(--color-navy-700)', dot: 'var(--color-navy-700)' },
+  matched:   { bg: 'var(--color-gold-tint)',  fg: '#6B5223',            bd: 'var(--color-gold)',     dot: 'var(--color-gold)' },
+  closed:    { bg: 'var(--color-slate-tint)', fg: '#3F4954',            bd: 'var(--color-slate)',    dot: 'var(--color-slate)' },
+  completed: { bg: 'var(--color-mist)',       fg: '#2A3D5C',            bd: 'var(--color-slate)',    dot: 'var(--color-navy-700)' },
+  hot:       { bg: 'var(--color-red-tint)',   fg: '#7E2F24',            bd: 'var(--color-red)',      dot: 'var(--color-red)' },
+  wanted:    { bg: 'var(--color-red-tint)',   fg: '#7E2F24',            bd: 'var(--color-red)',      dot: 'var(--color-red)' },
+  offer:     { bg: 'var(--color-sage-tint)',  fg: '#3E5A42',            bd: 'var(--color-sage)',     dot: '#4A6B4E' },
+  neutral:   { bg: 'var(--color-mist-tint)',  fg: '#3F4954',            bd: 'var(--color-slate)',    dot: 'var(--color-slate)' },
 } as const;
 
 export type StatusTone = keyof typeof STATUS_TONES;
 
 export function StatusChip({
-  children, cn, tone = 'neutral', className = '',
-}: { children: ReactNode; cn?: string; tone?: StatusTone; className?: string }) {
+  children, cn, tone = 'neutral', dot = true, className = '',
+}: { children: ReactNode; cn?: string; tone?: StatusTone; dot?: boolean; className?: string }) {
   const t = STATUS_TONES[tone];
   const { pick, isCjk } = usePick();
   const cjk = isCjk(cn);
   return (
     <span className={`${cjk ? 'rof-cjk' : 'rof-label'} ${className}`} style={{
-      display: 'inline-flex', alignItems: 'baseline',
-      padding: '4px 7px', background: t.bg, color: t.fg,
-      border: `var(--bw) solid ${t.bd}`, borderRadius: 0,
-    }}>{pick(children, cn)}</span>
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 7px', background: t.bg, color: t.fg,
+      border: `var(--bw) solid ${t.bd}`, borderRadius: 0, lineHeight: 1,
+    }}>
+      {/* The design gives every status chip a 5px square in the state colour.
+          Without it the chips read as plain tags rather than states. */}
+      {dot ? <span aria-hidden style={{ width: 5, height: 5, flex: 'none', background: t.dot }} /> : null}
+      <span>{pick(children, cn)}</span>
+    </span>
   );
 }
 
@@ -324,20 +334,42 @@ export function SecAction({
 
 /* ----------------------------------------------------------------- layout */
 
-/** Section heading: gold rule, caps title, optional trailing action. */
+/**
+ * Section heading — a navy plate with a gold inset ring, then a gold hairline
+ * running out to the trailing action.
+ *
+ * This is the design's own construction. It was a gold underline with the
+ * title above it here, which is a different thing entirely and is what made
+ * every section on every screen read wrong.
+ *
+ * The plate is set at body size, not h3: index.html steps it down for exactly
+ * this reason — h3 wraps the title onto two lines in a phone column and the
+ * plate bloats. A plate is a label, not reading copy.
+ */
 export function SectionHeader({
-  children, cn, trailing, className = '',
-}: { children: ReactNode; cn?: string; trailing?: ReactNode; className?: string }) {
+  children, cn, icon, trailing, className = '',
+}: { children: ReactNode; cn?: string; icon?: string; trailing?: ReactNode; className?: string }) {
   const { pick, isCjk } = usePick();
   const cjk = isCjk(cn);
   return (
-    <div className={`flex items-end justify-between gap-3 ${className}`}
-      style={{ borderBottom: '2px solid var(--color-gold)', paddingBottom: 7 }}>
-      <span className={cjk ? 'rof-cjk' : 'rof-label'}
-        style={{ color: 'var(--color-ink)', fontSize: 'var(--text-h3)', lineHeight: 1.35, minWidth: 0 }}>
-        {pick(children, cn)}
-      </span>
-      {trailing ? <span style={{ flex: 'none' }}>{trailing}</span> : null}
+    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        flex: '0 1 auto', minWidth: 0, flexWrap: 'wrap',
+        background: 'var(--color-navy-900)', color: 'var(--color-on-navy)',
+        border: '2px solid var(--color-navy-900)', padding: '6px 12px',
+        boxShadow: 'inset 0 0 0 1px rgba(201,166,107,0.55)',
+      }}>
+        {icon ? <Sprite name={icon} size={16} /> : null}
+        <span style={{
+          fontFamily: cjk ? 'var(--font-cjk)' : 'var(--font-display)', fontWeight: 700,
+          fontSize: 'var(--text-body)',
+          letterSpacing: cjk ? 0 : 'var(--tracking-label)',
+          textTransform: cjk ? 'none' : 'uppercase', lineHeight: 1.2,
+        }}>{pick(children, cn)}</span>
+      </div>
+      <span aria-hidden style={{ flex: '1 1 12px', minWidth: 0, height: 2, background: 'var(--color-gold)', opacity: 0.55 }} />
+      {trailing}
     </div>
   );
 }
@@ -457,6 +489,104 @@ export function Crest({ size = 96, className = '' }: { size?: number; className?
       <i style={{ ...corner, top: -unit, right: -unit }} />
       <i style={{ ...corner, bottom: -unit, left: -unit }} />
       <i style={{ ...corner, bottom: -unit, right: -unit }} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- stat strip */
+
+/**
+ * The counter strip: pixel icon, big number, caption.
+ *
+ * Cells auto-fit so a three- or four-stat strip reflows to two rows on a phone
+ * rather than overflowing. The 2px gap over a line-coloured container is what
+ * paints the dividers — a per-cell borderLeft would go wrong the moment the
+ * strip wraps.
+ */
+export function StatRow({
+  stats, size = 'md', minCell = 104, className = '',
+}: {
+  stats: { icon?: string; value: ReactNode; label: string; cn?: string }[];
+  size?: 'md' | 'lg'; minCell?: number; className?: string;
+}) {
+  const { pick, isCjk } = usePick();
+  const big = size === 'lg';
+  return (
+    <div className={className} style={{
+      display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${minCell}px, 1fr))`,
+      gap: 2, border: '2px solid var(--color-line-soft)', background: 'var(--color-line-soft)',
+    }}>
+      {stats.map((s, i) => (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: big ? '12px 14px' : '10px 12px', background: 'var(--color-card)',
+        }}>
+          {s.icon ? <Sprite name={s.icon} size={big ? 24 : 20} /> : null}
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontWeight: 700,
+              fontSize: big ? 'var(--text-h2)' : 'var(--text-h3)',
+              color: 'var(--color-ink)', lineHeight: 1,
+            }}>{s.value}</div>
+            <div className={isCjk(s.cn) ? 'rof-cjk' : undefined} style={{
+              fontFamily: isCjk(s.cn) ? 'var(--font-cjk)' : 'var(--font-body)',
+              fontSize: 'var(--text-small)', color: 'var(--color-muted)',
+              marginTop: 3, lineHeight: 1.35, overflowWrap: 'anywhere',
+            }}>{pick(s.label, s.cn)}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- ribbon */
+
+/** A navy banner with notched ends and a gold inset ring. */
+export function Ribbon({
+  children, cn, color = 'var(--color-navy-900)', className = '',
+}: { children: ReactNode; cn?: string; color?: string; className?: string }) {
+  const { pick, isCjk } = usePick();
+  const cjk = isCjk(cn);
+  const notch = { width: 0, height: 0, borderTop: '17px solid transparent', borderBottom: '17px solid transparent', flex: 'none' as const };
+  return (
+    <div className={className} style={{ display: 'flex', alignItems: 'stretch' }}>
+      <span aria-hidden style={{ ...notch, borderRight: `12px solid ${color}` }} />
+      <div style={{
+        flex: 1, background: color, padding: '8px 16px', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', gap: 10,
+        boxShadow: 'inset 0 0 0 1px rgba(201,166,107,0.6)',
+      }}>
+        <span className={cjk ? 'rof-cjk' : undefined} style={{
+          fontFamily: cjk ? 'var(--font-cjk)' : 'var(--font-display)', fontWeight: 700,
+          fontSize: 'var(--text-small)',
+          letterSpacing: cjk ? 0 : 'var(--tracking-label)',
+          textTransform: cjk ? 'none' : 'uppercase',
+          color: 'var(--color-gold)', lineHeight: 1,
+        }}>{pick(children, cn)}</span>
+      </div>
+      <span aria-hidden style={{ ...notch, borderLeft: `12px solid ${color}` }} />
+    </div>
+  );
+}
+
+/* --------------------------------------------------------- parchment note */
+
+/** A taped parchment slip — the Republic's own voice, not UI chrome. */
+export function ParchmentNote({
+  title, cn, children, className = '',
+}: { title?: string; cn?: string; children: ReactNode; className?: string }) {
+  const { pick, isCjk } = usePick();
+  return (
+    <div className={`relative ${className}`} style={{
+      background: 'var(--color-parchment)', border: '2px solid var(--color-brown)',
+      padding: 14, boxShadow: 'var(--shadow-px)',
+    }}>
+      {title ? <Bi en={title} zh={cn} color="var(--color-brown)" /> : null}
+      <p className={isCjk(cn) ? 'rof-cjk' : undefined} style={{
+        margin: title ? '8px 0 0' : 0, fontSize: 'var(--text-body)',
+        lineHeight: 1.65, color: 'var(--color-ink-2)',
+      }}>{pick(children, undefined)}</p>
     </div>
   );
 }

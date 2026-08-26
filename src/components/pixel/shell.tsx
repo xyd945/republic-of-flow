@@ -18,28 +18,46 @@ import { Bi, Sprite } from './index';
 export function TopBar({
   title, cn, onBack, right,
 }: { title?: string; cn?: string; onBack?: () => void; right?: ReactNode }) {
+  const { lang } = useI18n();
+  const cjk = lang === 'zh' && !!cn;
   return (
     <header style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-      padding: '8px 12px', background: 'var(--color-navy-900)',
-      borderBottom: '3px solid var(--color-gold)', minHeight: 60,
+      display: 'flex', alignItems: 'center', gap: 10,
+      minHeight: 56, padding: '0 12px', background: 'var(--color-navy-900)',
+      color: 'var(--color-on-navy)', borderBottom: '3px solid var(--color-gold)',
     }}>
-      <div className="flex items-center" style={{ gap: 10, minWidth: 0 }}>
-        {onBack ? (
-          <button type="button" onClick={onBack} aria-label="Back"
-            style={{
-              width: 44, height: 44, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
-              background: 'transparent', border: '2px solid var(--color-gold)', borderRadius: 0,
-              color: 'var(--color-gold)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)', lineHeight: 1,
-            }}>{'<'}</button>
-        ) : null}
-        {title ? (
-          <Bi en={title} zh={cn} color="var(--color-gold)" size="var(--text-h3)" />
-        ) : (
-          <span className="rof-label" style={{ color: 'var(--color-gold)', fontSize: 'var(--text-h3)', whiteSpace: 'nowrap' }}>REPUBLIC OF FLOW</span>
-        )}
-      </div>
-      <div className="flex items-center" style={{ gap: 8 }}>{right}</div>
+      {onBack ? (
+        /* A drawn chevron, not a "<" in a box. 30 wide, 44 tall: the design
+           gives the target its height without drawing a button frame. */
+        <button type="button" onClick={onBack} aria-label="Back"
+          style={{
+            display: 'grid', placeItems: 'center', width: 30, height: 44, flex: 'none',
+            background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+          }}>
+          <span aria-hidden style={{
+            width: 0, height: 0,
+            borderTop: '6px solid transparent', borderBottom: '6px solid transparent',
+            borderRight: '8px solid var(--color-gold)',
+          }} />
+        </button>
+      ) : null}
+
+      {title ? (
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{
+            fontFamily: cjk ? 'var(--font-cjk)' : 'var(--font-display)', fontWeight: 700,
+            fontSize: 'var(--text-h3)',
+            letterSpacing: cjk ? 0 : 'var(--tracking-label)',
+            textTransform: cjk ? 'none' : 'uppercase', lineHeight: 1.2,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{cjk ? cn : title}</div>
+        </div>
+      ) : (
+        <span className="rof-label" style={{
+          flex: 1, color: 'var(--color-gold)', fontSize: 'var(--text-h3)', whiteSpace: 'nowrap',
+        }}>REPUBLIC OF FLOW</span>
+      )}
+      {right}
     </header>
   );
 }
@@ -47,24 +65,34 @@ export function TopBar({
 /* -------------------------------------------------------- language switch */
 
 export function LangSwitch({ lang, onChange }: { lang: string; onChange: (l: 'en' | 'zh') => void }) {
+  /* The design's own switcher: 中文 first, EN second, body-size type, 6/12
+     padding, a gold divider between them and a translucent navy ground. */
+  const items = [
+    { code: 'zh' as const, label: '中文' },
+    { code: 'en' as const, label: 'EN' },
+  ];
   return (
-    <span style={{ display: 'inline-flex', border: '2px solid var(--color-gold)' }}>
-      {(['en', 'zh'] as const).map((l) => {
-        const on = lang === l;
+    <div style={{
+      display: 'inline-flex', alignItems: 'stretch', flex: 'none',
+      border: '2px solid var(--color-gold)', background: 'rgba(15,30,52,0.5)', borderRadius: 0,
+    }}>
+      {items.map((l, i) => {
+        const on = l.code === lang;
         return (
-          <button key={l} type="button" onClick={() => onChange(l)} aria-pressed={on}
-            className={l === 'zh' ? 'rof-cjk' : 'rof-label'}
+          <button key={l.code} type="button" onClick={() => onChange(l.code)} aria-pressed={on}
             style={{
-              minWidth: 44, minHeight: 40, padding: '0 10px', border: 'none', borderRadius: 0,
-              cursor: 'pointer', lineHeight: 1, fontSize: 'var(--text-small)',
+              padding: '6px 12px',
               background: on ? 'var(--color-gold)' : 'transparent',
               color: on ? 'var(--color-navy-900)' : 'var(--color-gold)',
-              fontFamily: l === 'zh' ? 'var(--font-cjk)' : 'var(--font-display)',
-              fontWeight: 700,
-            }}>{l === 'en' ? 'EN' : '中'}</button>
+              border: 'none', borderLeft: i ? '2px solid var(--color-gold)' : 'none',
+              borderRadius: 0, cursor: 'pointer', lineHeight: 1,
+              fontFamily: l.code === 'zh' ? 'var(--font-cjk)' : 'var(--font-display)',
+              fontWeight: 700, fontSize: 'var(--text-body)',
+              letterSpacing: l.code === 'zh' ? 0 : 'var(--tracking-label)',
+            }}>{l.label}</button>
         );
       })}
-    </span>
+    </div>
   );
 }
 
@@ -74,9 +102,9 @@ export function BellButton({ count, onClick }: { count: number; onClick: () => v
   return (
     <button type="button" onClick={onClick} aria-label="Notifications"
       style={{
-        position: 'relative', width: 44, height: 44, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
-        background: 'transparent', border: '2px solid var(--color-gold)', borderRadius: 0,
-        color: 'var(--color-gold)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)', lineHeight: 1,
+        position: 'relative', width: 30, height: 44, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
+        background: 'transparent', border: 'none', borderRadius: 0, padding: 0,
+        color: 'var(--color-gold)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)', lineHeight: 1,
       }}>
       !
       {count > 0 && (
@@ -112,13 +140,13 @@ export function TabBar({ active, onChange }: { active: string; onChange: (id: st
           <button key={it.id} type="button" onClick={() => onChange(it.id)}
             style={{
               position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', gap: 5, minHeight: 60, padding: '9px 2px',
+              justifyContent: 'center', gap: 4, minHeight: 56, padding: '8px 2px',
               borderRadius: 0, cursor: 'pointer', border: 'none',
               background: on ? 'rgba(201,166,107,0.16)' : 'transparent',
               borderTop: `3px solid ${on ? 'var(--color-gold)' : 'transparent'}`, marginTop: -3,
               color: on ? 'var(--color-gold)' : '#E8DFCB',
             }}>
-            <Sprite name={it.icon} size={24} className={on ? '' : 'opacity-75'} />
+            <Sprite name={it.icon} size={22} className={on ? '' : 'opacity-75'} />
             <span className={lang === 'zh' ? 'rof-cjk' : 'rof-label'}
               style={{ fontSize: 'var(--text-small)', letterSpacing: lang === 'zh' ? 0 : 'var(--tracking-nav)', lineHeight: 1 }}>
               {lang === 'zh' ? it.cn : it.label}

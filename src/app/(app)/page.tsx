@@ -7,7 +7,7 @@ import { useListings, usePeople } from '@/lib/data/views';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
-  Avatar, Bi, BiText, Button, EmptyState, Panel, PixelSpinner, SecAction, SectionHeader, Sprite, StatusChip,
+  Avatar, Bi, BiText, Button, EmptyState, Panel, ParchmentNote, PixelSpinner, Ribbon, SecAction, SectionHeader, Sprite, StatRow, StatusChip,
 } from '@/components/pixel';
 
 /**
@@ -71,7 +71,7 @@ export default function HomePage() {
       {/* hero */}
       <Panel pad={0} innerRule={false} style={{ overflow: 'hidden' }}>
         <div style={{
-          height: 168, display: 'grid', placeItems: 'center',
+          height: 176, display: 'grid', placeItems: 'center',
           background: 'linear-gradient(180deg, var(--color-mist-tint), var(--color-card))',
           borderBottom: '2px solid var(--color-navy-900)',
         }}>
@@ -98,24 +98,17 @@ export default function HomePage() {
         </div>
       </Panel>
 
-      {/* the three numbers we can actually count */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
-        {[
-          { n: profiles.length, en: 'Founders', zh: '创始人' },
-          { n: worldCount, en: 'Worlds', zh: '隐藏世界' },
-          { n: openMarket.length, en: 'Open', zh: '进行中' },
-        ].map((s) => (
-          <Panel key={s.en} pad={10} innerRule={false} className="text-center">
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h1)', color: 'var(--color-navy-700)', lineHeight: 1.25 }}>{s.n}</div>
-            <div style={{ marginTop: 5 }}><Bi en={s.en} zh={s.zh} color="var(--color-muted)" /></div>
-          </Panel>
-        ))}
-      </div>
+      {/* the numbers we can actually count, in the design's divided strip */}
+      <StatRow stats={[
+        { icon: 'stat-friends', value: profiles.length, label: 'Founders', cn: '创始人' },
+        { icon: 'stat-worlds', value: worldCount, label: 'Worlds', cn: '隐藏世界' },
+        { icon: 'handshake', value: openMarket.length, label: 'Open', cn: '进行中' },
+      ]} />
 
       {/* discover someone new */}
       {spot && (
         <section>
-          <SectionHeader cn="认识新的人" className="mb-3"
+          <SectionHeader icon="nav-discover" cn="认识新的人" className="mb-3"
             trailing={
               <SecAction en="Shuffle" zh="换一个" onClick={() => setShuffleIdx((i) => i + 1)} />
             }>
@@ -150,7 +143,7 @@ export default function HomePage() {
       {/* hidden world of the day */}
       {pick && (
         <section>
-          <SectionHeader cn="今日隐藏世界" className="mb-3">Hidden World of the Day</SectionHeader>
+          <SectionHeader icon="star" cn="今日隐藏世界" className="mb-3">Hidden World of the Day</SectionHeader>
           <Panel pad={14} ariaLabel={`${ui('dossier.title')} — ${pick.p.full_name}`}
             onClick={() => router.push(`/people/${pick.p.id}`)}>
             <Bi en="Hidden World" zh="隐藏世界" color="var(--color-gold)" />
@@ -171,7 +164,7 @@ export default function HomePage() {
 
       {/* market glance */}
       <section>
-        <SectionHeader cn="市场动态" className="mb-3"
+        <SectionHeader icon="nav-auction" cn="市场动态" className="mb-3"
           trailing={
             <SecAction en="All" zh="全部" onClick={() => router.push('/market')} />
           }>
@@ -201,10 +194,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* the Republic's own line — it gets out of the way once you've met */}
-      <Panel tone="navy" pad={13} innerRule={false} className="text-center">
-        <Bi en="One Republic, Infinite Connections" zh="一个共和国，无限连接" color="var(--color-gold)" />
-      </Panel>
+      {/* the Republic's own voice: a notched ribbon, then a taped slip */}
+      <Ribbon cn="一个共和国，无限连接">One Republic, Infinite Connections</Ribbon>
+
+      <ParchmentNote title="Reality First" cn="现实优先">
+        {lang === 'zh'
+          ? '配对之后，系统就退场。当现实更容易时，共和国让路。'
+          : 'Match, then disappear. When reality is easier, the Republic gets out of the way.'}
+      </ParchmentNote>
     </Page>
   );
 }
