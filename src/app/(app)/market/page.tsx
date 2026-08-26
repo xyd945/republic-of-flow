@@ -21,15 +21,19 @@ import type { ListingWithCreator, ListingInterest, MatchWithParties, Language } 
 function Tabs({
   items, value, onChange,
 }: { items: { id: string; label: string; cn?: string; badge?: number }[]; value: string; onChange: (id: string) => void }) {
+  /* Scrolls rather than crushes. At the raised type scale four labels no longer
+     fit across 375px, and shrinking them either wraps mid-word or clips. */
   return (
-    <div style={{ display: 'flex', border: '2px solid var(--color-navy-900)', boxShadow: 'var(--shadow-px)' }}>
+    <div className="no-scrollbar" style={{ overflowX: 'auto' }}>
+    <div style={{ display: 'flex', minWidth: '100%', width: 'max-content', border: '2px solid var(--color-navy-900)', boxShadow: 'var(--shadow-px)' }}>
       {items.map((it) => {
         const on = value === it.id;
         return (
           <button key={it.id} type="button" onClick={() => onChange(it.id)}
-            className="rof-label flex-1"
+            className="rof-label"
             style={{
-              position: 'relative', padding: '9px 4px', border: 'none', borderRadius: 0,
+              position: 'relative', flex: '1 0 auto', whiteSpace: 'nowrap',
+              minHeight: 44, padding: '9px 12px', border: 'none', borderRadius: 0,
               cursor: 'pointer', lineHeight: 1,
               background: on ? 'var(--color-navy-900)' : 'transparent',
               color: on ? 'var(--color-gold)' : 'var(--color-muted)',
@@ -44,6 +48,7 @@ function Tabs({
           </button>
         );
       })}
+    </div>
     </div>
   );
 }

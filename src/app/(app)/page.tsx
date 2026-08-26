@@ -7,8 +7,7 @@ import { useListings, usePeople } from '@/lib/data/views';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
-  Avatar, Bi, BiText, Button, EmptyState, Panel,
-  PixelSpinner, SectionHeader, Sprite, StatusChip,
+  Avatar, Bi, BiText, Button, EmptyState, Panel, PixelSpinner, SecAction, SectionHeader, Sprite, StatusChip,
 } from '@/components/pixel';
 
 /**
@@ -118,10 +117,7 @@ export default function HomePage() {
         <section>
           <SectionHeader cn="认识新的人" className="mb-3"
             trailing={
-              <button type="button" onClick={() => setShuffleIdx((i) => i + 1)}
-                style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}>
-                <Bi en="Shuffle" zh="换一个" color="var(--color-gold)" />
-              </button>
+              <SecAction en="Shuffle" zh="换一个" onClick={() => setShuffleIdx((i) => i + 1)} />
             }>
             Discover Someone New
           </SectionHeader>
@@ -177,10 +173,7 @@ export default function HomePage() {
       <section>
         <SectionHeader cn="市场动态" className="mb-3"
           trailing={
-            <button type="button" onClick={() => router.push('/market')}
-              style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}>
-              <Bi en="All" zh="全部" color="var(--color-gold)" />
-            </button>
+            <SecAction en="All" zh="全部" onClick={() => router.push('/market')} />
           }>
           In the Market
         </SectionHeader>

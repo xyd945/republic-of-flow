@@ -92,13 +92,10 @@ export function NotificationPanel({
           padding: '11px 13px', background: 'var(--color-navy-900)',
           borderBottom: '3px solid var(--color-gold)', flex: 'none',
         }}>
-          <span className="rof-label inline-flex items-baseline" style={{ gap: 6, color: 'var(--color-gold)' }}>
-            <span>{ui('notif.title')}</span>
-            <span className="rof-cjk">通知</span>
-          </span>
+          <Bi en={ui('notif.title')} zh="通知" color="var(--color-gold)" size="var(--text-h3)" />
           <button type="button" onClick={onClose} aria-label={ui('common.close')}
             style={{
-              width: 26, height: 26, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
+              width: 44, height: 44, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
               background: 'transparent', border: '2px solid var(--color-gold)', borderRadius: 0,
               color: 'var(--color-gold)', fontFamily: 'var(--font-display)', fontWeight: 700,
               fontSize: 'var(--text-small)', lineHeight: 1,

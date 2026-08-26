@@ -10,6 +10,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { useI18n } from '@/lib/i18n/context';
 import { Bi, Sprite } from './index';
 
 /* --------------------------------------------------------------- top bar */
@@ -20,23 +21,20 @@ export function TopBar({
   return (
     <header style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-      padding: '10px 12px', background: 'var(--color-navy-900)',
-      borderBottom: '3px solid var(--color-gold)', minHeight: 48,
+      padding: '8px 12px', background: 'var(--color-navy-900)',
+      borderBottom: '3px solid var(--color-gold)', minHeight: 60,
     }}>
       <div className="flex items-center" style={{ gap: 10, minWidth: 0 }}>
         {onBack ? (
           <button type="button" onClick={onBack} aria-label="Back"
             style={{
-              width: 30, height: 30, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
+              width: 44, height: 44, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
               background: 'transparent', border: '2px solid var(--color-gold)', borderRadius: 0,
               color: 'var(--color-gold)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)', lineHeight: 1,
             }}>{'<'}</button>
         ) : null}
         {title ? (
-          <span className="rof-label inline-flex items-baseline" style={{ gap: 6, color: 'var(--color-gold)', minWidth: 0 }}>
-            <span style={{ whiteSpace: 'nowrap' }}>{title}</span>
-            {cn ? <span className="rof-cjk" style={{ whiteSpace: 'nowrap' }}>{cn}</span> : null}
-          </span>
+          <Bi en={title} zh={cn} color="var(--color-gold)" size="var(--text-h3)" />
         ) : (
           <span className="rof-label" style={{ color: 'var(--color-gold)', fontSize: 'var(--text-h3)', whiteSpace: 'nowrap' }}>REPUBLIC OF FLOW</span>
         )}
@@ -57,8 +55,8 @@ export function LangSwitch({ lang, onChange }: { lang: string; onChange: (l: 'en
           <button key={l} type="button" onClick={() => onChange(l)} aria-pressed={on}
             className={l === 'zh' ? 'rof-cjk' : 'rof-label'}
             style={{
-              padding: '4px 7px', border: 'none', borderRadius: 0, cursor: 'pointer', lineHeight: 1,
-              fontSize: 'var(--text-small)',
+              minWidth: 44, minHeight: 40, padding: '0 10px', border: 'none', borderRadius: 0,
+              cursor: 'pointer', lineHeight: 1, fontSize: 'var(--text-small)',
               background: on ? 'var(--color-gold)' : 'transparent',
               color: on ? 'var(--color-navy-900)' : 'var(--color-gold)',
               fontFamily: l === 'zh' ? 'var(--font-cjk)' : 'var(--font-display)',
@@ -76,7 +74,7 @@ export function BellButton({ count, onClick }: { count: number; onClick: () => v
   return (
     <button type="button" onClick={onClick} aria-label="Notifications"
       style={{
-        position: 'relative', width: 30, height: 30, display: 'grid', placeItems: 'center', cursor: 'pointer',
+        position: 'relative', width: 44, height: 44, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
         background: 'transparent', border: '2px solid var(--color-gold)', borderRadius: 0,
         color: 'var(--color-gold)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)', lineHeight: 1,
       }}>
@@ -102,6 +100,7 @@ export const TABS = [
 ] as const;
 
 export function TabBar({ active, onChange }: { active: string; onChange: (id: string) => void }) {
+  const { lang } = useI18n();
   return (
     <nav style={{
       display: 'grid', gridTemplateColumns: `repeat(${TABS.length}, 1fr)`,
@@ -113,15 +112,17 @@ export function TabBar({ active, onChange }: { active: string; onChange: (id: st
           <button key={it.id} type="button" onClick={() => onChange(it.id)}
             style={{
               position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', gap: 4, minHeight: 56, padding: '8px 2px',
+              justifyContent: 'center', gap: 5, minHeight: 60, padding: '9px 2px',
               borderRadius: 0, cursor: 'pointer', border: 'none',
               background: on ? 'rgba(201,166,107,0.16)' : 'transparent',
               borderTop: `3px solid ${on ? 'var(--color-gold)' : 'transparent'}`, marginTop: -3,
               color: on ? 'var(--color-gold)' : '#E8DFCB',
             }}>
-            <Sprite name={it.icon} size={22} className={on ? '' : 'opacity-75'} />
-            <span className="rof-label" style={{ letterSpacing: '0.04em' }}>{it.label}</span>
-            <span className="rof-cjk" style={{ fontSize: 'var(--text-small)', lineHeight: 1 }}>{it.cn}</span>
+            <Sprite name={it.icon} size={24} className={on ? '' : 'opacity-75'} />
+            <span className={lang === 'zh' ? 'rof-cjk' : 'rof-label'}
+              style={{ fontSize: 'var(--text-small)', letterSpacing: lang === 'zh' ? 0 : 'var(--tracking-nav)', lineHeight: 1 }}>
+              {lang === 'zh' ? it.cn : it.label}
+            </span>
           </button>
         );
       })}

@@ -13,7 +13,32 @@
  */
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useI18n } from '@/lib/i18n/context';
 import { useOverlay } from './overlay';
+
+/**
+ * Pick the one language the interface is currently in.
+ *
+ * The system used to print English and 中文 side by side in every label, chip
+ * and button. Two scripts inside one 44px control is simply too much text —
+ * it crowded every frame and made the whole UI read as noise. The language
+ * switcher in the bar is the control now, so each primitive collapses its
+ * pair down to the active language before rendering.
+ *
+ * Returns the CJK flag too: 中文 needs its own face and neither the display
+ * face's letter-spacing nor its uppercasing, both of which are meaningless
+ * for Han characters.
+ */
+function usePick() {
+  const { lang } = useI18n();
+  const zh = lang === 'zh';
+  return {
+    lang,
+    pick: <T,>(en: T, cn?: T | null): T => (zh && cn != null && cn !== '' ? cn : en),
+    /** True only when we are actually showing the 中文 half. */
+    isCjk: (cn?: unknown) => zh && cn != null && cn !== '',
+  };
+}
 
 /* ------------------------------------------------------------------ text */
 
@@ -26,21 +51,24 @@ import { useOverlay } from './overlay';
  * voice is bilingual rather than translated.
  */
 export function Bi({
-  en, zh, color = 'var(--color-ink)', size = 'var(--text-small)', gap = 6, wrap = false, className = '',
+  en, zh, color = 'var(--color-ink)', size = 'var(--text-small)', wrap = false, className = '',
 }: {
-  en: string; zh?: string; color?: string; size?: string; gap?: number;
+  en: string; zh?: string; color?: string; size?: string;
   wrap?: boolean; className?: string;
 }) {
   /* The two halves must not break apart from each other mid-pair, so each is
      nowrap by default. A long sentence passed as `en` needs the opposite —
      `wrap` lets it fold instead of running off the side of the screen. */
-  const ws = wrap ? 'normal' : 'nowrap';
+  const { pick, isCjk } = usePick();
+  const text = pick(en, zh);
+  const cjk = isCjk(zh);
+  if (!text) return null;
   return (
-    <span className={`rof-label inline-flex items-baseline ${className}`}
-      style={{ color, fontSize: size, gap, flexWrap: wrap ? 'wrap' : 'nowrap', maxWidth: '100%' }}>
-      <span style={{ whiteSpace: ws }}>{en}</span>
-      {zh ? <span className="rof-cjk" style={{ fontSize: size, whiteSpace: ws }}>{zh}</span> : null}
-    </span>
+    <span className={`${cjk ? 'rof-cjk' : 'rof-label'} ${className}`}
+      style={{
+        display: 'inline-flex', alignItems: 'baseline', color, fontSize: size,
+        whiteSpace: wrap ? 'normal' : 'nowrap', maxWidth: '100%',
+      }}>{text}</span>
   );
 }
 
@@ -48,13 +76,17 @@ export function Bi({
 export function BiTitle({
   en, zh, size = 'var(--text-h2)', color = 'var(--color-ink)', className = '',
 }: { en: string; zh?: string; size?: string; color?: string; className?: string }) {
+  const { pick, isCjk } = usePick();
+  const text = pick(en, zh);
+  const cjk = isCjk(zh);
   return (
     <div className={className}>
       <div style={{
-        fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: size, lineHeight: 1.4,
-        letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase', color,
-      }}>{en}</div>
-      {zh ? <div className="rof-cjk" style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink-2)', marginTop: 4 }}>{zh}</div> : null}
+        fontFamily: cjk ? 'var(--font-cjk)' : 'var(--font-display)', fontWeight: 700, fontSize: size,
+        lineHeight: 'var(--lh-heading, 1.4)',
+        letterSpacing: cjk ? 0 : 'var(--tracking-display)',
+        textTransform: cjk ? 'none' : 'uppercase', color,
+      }}>{text}</div>
     </div>
   );
 }
@@ -62,15 +94,14 @@ export function BiTitle({
 /** Prose block: the reader's language first, the other beneath it. */
 export function BiText({
   en, zh, lang, color = 'var(--color-muted)', className = '',
-}: { en: string; zh?: string; lang: string; color?: string; className?: string }) {
-  const zhFirst = lang === 'zh' && !!zh;
-  const primary = zhFirst ? zh : en;
-  const secondary = zhFirst ? en : zh;
+}: { en: string; zh?: string; lang?: string; color?: string; className?: string }) {
+  const { pick, isCjk } = usePick();
+  const cjk = isCjk(zh);
   return (
-    <p className={className} style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 'var(--text-body)', lineHeight: 1.6, color }}>
-      <span className={zhFirst ? 'rof-cjk' : undefined}>{primary}</span>
-      {secondary ? <><br /><span className={zhFirst ? undefined : 'rof-cjk'}>{secondary}</span></> : null}
-    </p>
+    <p className={className} style={{
+      margin: 0, fontFamily: cjk ? 'var(--font-cjk)' : 'var(--font-body)',
+      fontSize: 'var(--text-body)', lineHeight: cjk ? 1.7 : 1.6, color,
+    }}>{pick(en, zh)}</p>
   );
 }
 
@@ -153,10 +184,12 @@ const BUTTON_TONES = {
   secondary: { bg: 'var(--color-card)', fg: 'var(--color-navy-900)', bd: 'var(--color-navy-900)' },
 } as const;
 
+/* 44px minimum on every size. The design calls this out explicitly: the old
+   bare text buttons were unreadable and hard to hit on a phone. */
 const BUTTON_SIZES = {
-  lg: { pad: '12px 24px', fs: 'var(--text-body)', gap: 10 },
-  md: { pad: '10px 16px', fs: 'var(--text-body)', gap: 8 },
-  sm: { pad: '6px 12px', fs: 'var(--text-small)', gap: 6 },
+  lg: { pad: '12px 24px', fs: 'var(--text-h3)', gap: 10, min: 48 },
+  md: { pad: '10px 16px', fs: 'var(--text-body)', gap: 8, min: 44 },
+  sm: { pad: '8px 12px', fs: 'var(--text-small)', gap: 6, min: 36 },
 } as const;
 
 export type ButtonTone = keyof typeof BUTTON_TONES;
@@ -181,8 +214,10 @@ export function Button({
 }) {
   const [hover, setHover] = useState(false);
   const [press, setPress] = useState(false);
+  const { pick, isCjk } = usePick();
   const t = BUTTON_TONES[tone];
   const s = BUTTON_SIZES[size];
+  const cjk = isCjk(cn);
   const off = press ? 1 : 3;
   const off_ = disabled || loading;
   return (
@@ -202,9 +237,9 @@ export function Button({
         display: block ? 'flex' : 'inline-flex',
         width: block ? '100%' : 'auto',
         alignItems: 'center', justifyContent: 'center', gap: s.gap,
-        fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: s.fs,
-        letterSpacing: 'var(--tracking-label)', textTransform: 'uppercase',
-        padding: s.pad, borderRadius: 0, lineHeight: 1,
+        fontFamily: cjk ? 'var(--font-cjk)' : 'var(--font-display)', fontWeight: 700, fontSize: s.fs,
+        letterSpacing: cjk ? 0 : 'var(--tracking-label)', textTransform: cjk ? 'none' : 'uppercase',
+        padding: s.pad, borderRadius: 0, lineHeight: 1, minHeight: s.min,
         background: off_ ? 'var(--color-slate-tint)' : t.bg,
         color: off_ ? 'var(--color-faint)' : t.fg,
         border: `var(--bw) solid ${off_ ? 'var(--color-slate)' : hover ? 'var(--color-gold)' : t.bd}`,
@@ -216,8 +251,7 @@ export function Button({
       }}
     >
       {loading ? <PixelSpinner /> : icon}
-      <span style={{ whiteSpace: 'nowrap' }}>{children}</span>
-      {cn ? <span className="rof-cjk" style={{ whiteSpace: 'nowrap' }}>{cn}</span> : null}
+      <span style={{ whiteSpace: 'nowrap' }}>{pick(children, cn)}</span>
     </button>
   );
 }
@@ -255,14 +289,36 @@ export function StatusChip({
   children, cn, tone = 'neutral', className = '',
 }: { children: ReactNode; cn?: string; tone?: StatusTone; className?: string }) {
   const t = STATUS_TONES[tone];
+  const { pick, isCjk } = usePick();
+  const cjk = isCjk(cn);
   return (
-    <span className={`rof-label inline-flex items-baseline ${className}`} style={{
-      gap: 5, padding: '4px 7px', background: t.bg, color: t.fg,
+    <span className={`${cjk ? 'rof-cjk' : 'rof-label'} ${className}`} style={{
+      display: 'inline-flex', alignItems: 'baseline',
+      padding: '4px 7px', background: t.bg, color: t.fg,
       border: `var(--bw) solid ${t.bd}`, borderRadius: 0,
-    }}>
-      <span>{children}</span>
-      {cn ? <span className="rof-cjk">{cn}</span> : null}
-    </span>
+    }}>{pick(children, cn)}</span>
+  );
+}
+
+/**
+ * The small action at the end of a SectionHeader row — Shuffle, Clear, Add.
+ *
+ * These were bare text buttons: no frame, no padding, no target worth aiming
+ * at. The design calls them out as unreadable and hard to hit, so they get a
+ * real 44px box with a visible gold edge like every other control.
+ */
+export function SecAction({
+  en, zh, onClick, ariaLabel,
+}: { en: string; zh?: string; onClick: () => void; ariaLabel?: string }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={ariaLabel}
+      style={{
+        flex: 'none', display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 12px',
+        background: 'var(--color-gold-tint)', border: '2px solid var(--color-gold)', borderRadius: 0,
+        cursor: 'pointer', boxShadow: 'var(--shadow-px)',
+      }}>
+      <Bi en={en} zh={zh} color="var(--color-navy-900)" />
+    </button>
   );
 }
 
@@ -272,12 +328,14 @@ export function StatusChip({
 export function SectionHeader({
   children, cn, trailing, className = '',
 }: { children: ReactNode; cn?: string; trailing?: ReactNode; className?: string }) {
+  const { pick, isCjk } = usePick();
+  const cjk = isCjk(cn);
   return (
     <div className={`flex items-end justify-between gap-3 ${className}`}
       style={{ borderBottom: '2px solid var(--color-gold)', paddingBottom: 7 }}>
-      <span className="rof-label" style={{ color: 'var(--color-ink)', fontSize: 'var(--text-h3)', lineHeight: 1.35, minWidth: 0 }}>
-        {children}
-        {cn ? <span className="rof-cjk" style={{ fontSize: 'var(--text-h3)', marginLeft: 6 }}>{cn}</span> : null}
+      <span className={cjk ? 'rof-cjk' : 'rof-label'}
+        style={{ color: 'var(--color-ink)', fontSize: 'var(--text-h3)', lineHeight: 1.35, minWidth: 0 }}>
+        {pick(children, cn)}
       </span>
       {trailing ? <span style={{ flex: 'none' }}>{trailing}</span> : null}
     </div>
@@ -293,10 +351,16 @@ export function Field({
   label, cn, hint, children, className = '',
 }: { label?: string; cn?: string; hint?: string; children: ReactNode; className?: string }) {
   return (
-    <label className={`block ${className}`}>
-      {label ? <span className="block" style={{ marginBottom: 7 }}><Bi en={label} zh={cn} color="var(--color-gold)" /></span> : null}
+    <label className={className} style={{ display: 'block' }}>
+      {label ? (
+        <span style={{ display: 'block', marginBottom: 7 }}>
+          <Bi en={label} zh={cn} color="var(--color-gold)" />
+        </span>
+      ) : null}
       {children}
-      {hint ? <span className="block" style={{ marginTop: 6, fontSize: 'var(--text-small)', color: 'var(--color-faint)' }}>{hint}</span> : null}
+      {hint ? (
+        <span style={{ display: 'block', marginTop: 6, fontSize: 'var(--text-small)', color: 'var(--color-faint)' }}>{hint}</span>
+      ) : null}
     </label>
   );
 }
@@ -441,13 +505,10 @@ export function Sheet({
           padding: '12px 14px', background: 'var(--color-navy-900)',
           borderBottom: '3px solid var(--color-gold)', flex: 'none',
         }}>
-          <span className="rof-label inline-flex items-baseline" style={{ gap: 6, color: 'var(--color-gold)', minWidth: 0 }}>
-            <span style={{ whiteSpace: 'nowrap' }}>{title}</span>
-            {cn ? <span className="rof-cjk" style={{ whiteSpace: 'nowrap' }}>{cn}</span> : null}
-          </span>
+          <Bi en={title} zh={cn} color="var(--color-gold)" size="var(--text-h3)" />
           <button type="button" onClick={onClose} aria-label="Close"
             style={{
-              width: 28, height: 28, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
+              width: 44, height: 44, flex: 'none', display: 'grid', placeItems: 'center', cursor: 'pointer',
               background: 'transparent', border: '2px solid var(--color-gold)', borderRadius: 0,
               color: 'var(--color-gold)', fontFamily: 'var(--font-display)', fontWeight: 700,
               fontSize: 'var(--text-body)', lineHeight: 1,

@@ -75,12 +75,17 @@
   --font-hero: 'Press Start 2P', 'Silkscreen', monospace;
 
   /* Integer sizes only. Named to match the design's scale. */
-  --text-hero: 32px;
-  --text-h1: 24px;
-  --text-h2: 16px;
-  --text-h3: 12px;
-  --text-body: 10px;
-  --text-small: 8px;
+  --text-hero: 40px;
+  --text-h1: 28px;
+  --text-h2: 20px;
+  --text-h3: 16px;
+  --text-body: 14px;
+  --text-small: 12px;
+  /* The source style guide's sizes (24/16/12/10/8) were drawn for a 1440px
+     desktop mock and are unreadable on a phone. The scale is stepped up ~40%
+     for the mobile-first product; ratios and hierarchy are unchanged. Whole
+     pixels only — a bitmap face scaled fractionally turns to mush. */
+  --text-micro: 10px;
 
   --tracking-display: 0.04em;
   --tracking-label: 0.08em;
@@ -151,12 +156,17 @@
   --font-cjk: 'DotGothic16', 'Pixelify Sans', sans-serif;
   --font-hero: 'Press Start 2P', 'Silkscreen', monospace;
 
-  --text-hero: 32px;
-  --text-h1: 24px;
-  --text-h2: 16px;
-  --text-h3: 12px;
-  --text-body: 10px;
-  --text-small: 8px;
+  --text-hero: 40px;
+  --text-h1: 28px;
+  --text-h2: 20px;
+  --text-h3: 16px;
+  --text-body: 14px;
+  --text-small: 12px;
+  /* The source style guide's sizes (24/16/12/10/8) were drawn for a 1440px
+     desktop mock and are unreadable on a phone. The scale is stepped up ~40%
+     for the mobile-first product; ratios and hierarchy are unchanged. Whole
+     pixels only — a bitmap face scaled fractionally turns to mush. */
+  --text-micro: 10px;
 
   --tracking-display: 0.04em;
   --tracking-label: 0.08em;

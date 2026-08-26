@@ -71,13 +71,13 @@ export default function LoginPage() {
             {/* Two lines on purpose: one line of this at h2 with display
                 tracking is wider than a 375px screen, and the frame clips it. */}
             <h1 style={{
-              margin: '14px 0 0', fontFamily: 'var(--font-display)', fontWeight: 700,
-              fontSize: 'var(--text-h1)', letterSpacing: 'var(--tracking-display)',
-              textTransform: 'uppercase', color: 'var(--color-gold)', lineHeight: 1.35,
-            }}>Republic<br />of Flow</h1>
-            <div className="rof-cjk" style={{ fontSize: 'var(--text-h3)', color: 'var(--color-parchment)', marginTop: 5 }}>
-              心流共和国
-            </div>
+              margin: '14px 0 0',
+              fontFamily: lang === 'zh' ? 'var(--font-cjk)' : 'var(--font-display)', fontWeight: 700,
+              fontSize: 'var(--text-h1)',
+              letterSpacing: lang === 'zh' ? 0 : 'var(--tracking-display)',
+              textTransform: lang === 'zh' ? 'none' : 'uppercase',
+              color: 'var(--color-gold)', lineHeight: 1.35,
+            }}>{lang === 'zh' ? '心流共和国' : <>Republic<br />of Flow</>}</h1>
             <p style={{
               margin: '10px auto 0', maxWidth: 280, fontSize: 'var(--text-small)',
               color: 'rgba(245,237,216,0.72)', lineHeight: 1.6,

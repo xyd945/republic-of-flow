@@ -587,9 +587,8 @@ export default function ProfilePage() {
           onClick={() => router.push('/admin')}>
           <div className="flex items-center" style={{ gap: 10 }}>
             <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)' }}>[*]</span>
-            <span className="rof-label inline-flex items-baseline" style={{ gap: 6, color: 'var(--color-gold)', flex: 1 }}>
-              <span>{ui('profile.curator_desk')}</span>
-              <span className="rof-cjk">策展人</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <Bi en={ui('profile.curator_desk')} zh="策展人" color="var(--color-gold)" size="var(--text-h3)" />
             </span>
             <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)' }}>&gt;</span>
           </div>

@@ -22,8 +22,7 @@ function StatBlock({ value, label, cn }: { value: number; label: string; cn: str
         fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
         color: 'var(--color-gold)', lineHeight: 1,
       }}>{value}</div>
-      <div className="rof-label" style={{ color: 'rgba(245,237,216,0.7)', marginTop: 5 }}>{label}</div>
-      <div className="rof-cjk" style={{ fontSize: 'var(--text-small)', color: 'rgba(245,237,216,0.5)', lineHeight: 1.3 }}>{cn}</div>
+      <div style={{ marginTop: 6 }}><Bi en={label} zh={cn} color="rgba(245,237,216,0.72)" /></div>
     </div>
   );
 }
@@ -56,7 +55,7 @@ function DeskTabs({
             <button key={it.id} type="button" onClick={() => onChange(it.id)}
               className="rof-label"
               style={{
-                padding: '9px 12px', border: 'none', borderRadius: 0, cursor: 'pointer',
+                minHeight: 44, padding: '9px 12px', border: 'none', borderRadius: 0, cursor: 'pointer',
                 lineHeight: 1, whiteSpace: 'nowrap',
                 background: on ? 'var(--color-navy-900)' : 'transparent',
                 color: on ? 'var(--color-gold)' : 'var(--color-muted)',

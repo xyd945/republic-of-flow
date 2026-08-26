@@ -62,19 +62,22 @@ export default function PeoplePage() {
       />
 
       {/* class filter — a hard-edged segmented control, not pills */}
-      <div style={{ display: 'flex', border: '2px solid var(--color-navy-900)', boxShadow: 'var(--shadow-px)' }}>
+      <div className="no-scrollbar" style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', minWidth: '100%', width: 'max-content', border: '2px solid var(--color-navy-900)', boxShadow: 'var(--shadow-px)' }}>
         {CLASS_TABS.map((c) => {
           const on = classFilter === c.id;
           return (
             <button key={c.id} type="button" onClick={() => setClassFilter(c.id)}
-              className="rof-label flex-1"
+              className="rof-label"
               style={{
-                padding: '9px 4px', border: 'none', borderRadius: 0, cursor: 'pointer', lineHeight: 1,
+                flex: '1 0 auto', whiteSpace: 'nowrap',
+                minHeight: 44, padding: '9px 12px', border: 'none', borderRadius: 0, cursor: 'pointer', lineHeight: 1,
                 background: on ? 'var(--color-navy-900)' : 'transparent',
                 color: on ? 'var(--color-gold)' : 'var(--color-muted)',
               }}>{c.label}</button>
           );
         })}
+      </div>
       </div>
 
       {/* category filter */}
@@ -83,17 +86,16 @@ export default function PeoplePage() {
           const on = catFilter === cat.id;
           return (
             <button key={cat.id} type="button" onClick={() => setCatFilter(on ? null : cat.id)} aria-pressed={on}
-              className="rof-label inline-flex items-baseline"
+              className={`${lang === 'zh' ? 'rof-cjk' : 'rof-label'} inline-flex items-center`}
               style={{
-                gap: 5, padding: '5px 8px', cursor: 'pointer', borderRadius: 0,
+                minHeight: 36, padding: '7px 10px', cursor: 'pointer', borderRadius: 0,
                 background: on ? `var(--color-cat-${cat.id})` : 'var(--color-white)',
                 color: on ? '#F5EDD8' : 'var(--color-muted)',
                 border: `2px solid ${on ? `var(--color-cat-${cat.id})` : 'var(--color-line-soft)'}`,
                 boxShadow: on ? 'var(--shadow-press)' : 'none',
                 transition: 'none',
               }}>
-              <span style={{ whiteSpace: 'nowrap' }}>{cat.en}</span>
-              <span className="rof-cjk" style={{ whiteSpace: 'nowrap' }}>{cat.zh}</span>
+              <span style={{ whiteSpace: 'nowrap' }}>{lang === 'zh' ? cat.zh : cat.en}</span>
             </button>
           );
         })}
