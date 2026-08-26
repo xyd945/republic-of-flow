@@ -3,6 +3,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { keys } from './client';
+import { attempt, humanise, TIMEOUT_MS } from './settling';
+
+/** The one place a request is actually issued. See ./settling for why. */
+const bounded = attempt;
 import type { HiddenWorld, Match, Profile, Translatable } from '@/types';
 
 /**
@@ -50,7 +54,6 @@ export type { ProfileRow, ListingRow };
  * told nothing rather than told what happened. Verified by pointing the app at
  * an unreachable host: before this, /people span indefinitely.
  */
-export const TIMEOUT_MS = 10_000;
 
 /**
  * supabase-js catches a network failure and hands it back as
@@ -58,78 +61,7 @@ export const TIMEOUT_MS = 10_000;
  * so it never reaches a `catch (e instanceof TypeError)`. True, and useless to
  * a classmate on a train — the error screen shows this text verbatim.
  */
-export function humanise(message: string): string {
-  if (/failed to fetch|networkerror|load failed/i.test(message)) {
-    return 'Could not reach the Republic. Check your connection.';
-  }
-  if (isFreshTokenRejection(message)) {
-    return 'Your session is still starting up. Give it a moment and try again.';
-  }
-  return message;
-}
-
-/**
- * A token that the API thinks was issued in the future.
- *
- * Supabase mints the token on its auth service and validates it at the API
- * gateway, and those two clocks are not the same clock. A token is stamped
- * `iat` to the second, so for the first second or two of its life a small
- * negative skew at the gateway makes it look like it comes from the future,
- * and every request is refused. Seconds later the same token is fine.
- *
- * In practice this only ever bit the first page load after signing in, when
- * the token is milliseconds old — the member saw "could not load this" and a
- * manual refresh fixed it, which is the tell.
- */
-function isFreshTokenRejection(message: string): boolean {
-  return /issued at future|not yet valid|jwt.*\bnbf\b/i.test(message);
-}
-
-/** Waits between attempts. Bounded on purpose: a real outage must still fail. */
-const SETTLE_MS = [300, 700, 1500];
-
-/**
- * Run a request, and wait out a token that is briefly from the future.
- *
- * The retry lives here rather than in react-query's `retry` option, and that
- * is deliberate: `retry: 0` on the QueryClient is load-bearing. React-query
- * PAUSES its own retries when it believes the device is offline, and a paused
- * retry never settles, which is what made two screens spin forever. This loop
- * is ours — nothing can pause it, every attempt carries its own timeout, and
- * the total wait is bounded at 2.5s before the error surfaces as normal.
- *
- * Safe for writes as well as reads: the gateway rejects the token before the
- * request reaches Postgres, so a refused attempt did nothing to retry over.
- */
-async function attempt<T>(run: (signal: AbortSignal) => PromiseLike<T>): Promise<T> {
-  for (let i = 0; ; i++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    try {
-      return await run(ctrl.signal);
-    } catch (e) {
-      if (ctrl.signal.aborted) {
-        throw new Error('The Republic took too long to answer. Check your connection.');
-      }
-      const message = e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e);
-      if (isFreshTokenRejection(message) && i < SETTLE_MS.length) {
-        await new Promise((r) => setTimeout(r, SETTLE_MS[i]));
-        continue;
-      }
-      // Only Errors are rewritten. PostgREST hands back a plain object
-      // carrying `code`, and callers read it — the market maps 23505 to
-      // "you already raised your hand" — so that object is passed through
-      // untouched.
-      throw e instanceof Error ? new Error(humanise(message)) : e;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-}
-
-export function bounded<T>(work: (signal: AbortSignal) => PromiseLike<T>): Promise<T> {
-  return attempt(work);
-}
+export { humanise, bounded, TIMEOUT_MS };
 
 async function select<T>(
   build: (
@@ -137,10 +69,11 @@ async function select<T>(
     signal: AbortSignal,
   ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
 ): Promise<T[]> {
-  return attempt(async (signal) => {
+  return bounded(async (signal) => {
     const { data, error } = await build(createClient(), signal);
-    // Thrown raw; attempt() decides whether this is worth waiting out and
-    // humanises it only once it has given up.
+    // Thrown RAW. attempt() decides whether this is worth waiting out, and
+    // humanises it only once it has given up — humanising here would hide the
+    // message the predicate needs to see.
     if (error) throw new Error(error.message);
     return data ?? [];
   });

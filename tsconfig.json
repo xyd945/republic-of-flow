@@ -6,6 +6,11 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // The node test runner resolves relative imports by their real extension,
+    // so tests/settling.test.ts imports ../src/lib/data/settling.ts with the
+    // .ts on it. Legal only alongside noEmit, which is already set. Nothing in
+    // the app imports this way; the flag only permits it.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

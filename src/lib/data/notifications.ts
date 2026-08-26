@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { keys } from './client';
-import { bounded, humanise } from './tables';
+import { bounded } from './tables';
 import { useMarkNotificationsRead } from './mutations';
 import type { AppNotification } from '@/types';
 
@@ -35,7 +35,11 @@ export function useNotifications() {
         .order('created_at', { ascending: false })
         .limit(PAGE)
         .abortSignal(signal);
-      if (error) throw new Error(humanise(error.message));
+      // RAW, not humanised. Humanising here rewrote "JWT issued at future"
+      // into friendly prose before bounded() could recognise it, so the
+      // notification panel was the one caller that never got the retry — and
+      // every test still passed.
+      if (error) throw new Error(error.message);
       return (data ?? []) as AppNotification[];
     }),
   });
