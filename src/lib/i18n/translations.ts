@@ -163,6 +163,7 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'notif.interest_accepted': { en: '{name} accepted your request on {listing} — you are matched', zh: '{name} 接受了你在「{listing}」的请求 — 你们已配对' },
   'notif.interest_declined': { en: '{name} declined your request on {listing}', zh: '{name} 婉拒了你在「{listing}」的请求' },
   'notif.suggestion_made': { en: 'A curator suggested {name} for your listing {listing}', zh: '策展人为你的「{listing}」推荐了 {name}' },
+  'notif.suggested_to_you': { en: 'A curator put you forward for {name}’s {listing} — take a look', zh: '策展人把你推荐给了 {name} 的「{listing}」— 去看看' },
   'notif.match_undone': { en: 'A curator undid your match on {listing}', zh: '策展人撤销了你在「{listing}」的配对' },
   'notif.match_met': { en: '{name} marked that you met', zh: '{name} 标记了你们已见面' },
   'notif.a_listing': { en: 'a listing', zh: '一个条目' },

@@ -487,6 +487,23 @@ export default function MarketPage() {
   // would spin every button on the page at once.
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // Set by ?listing=<id>, so a notification can land on the thing it is about.
+  const [spotlight, setSpotlight] = useState<string | null>(null);
+  /**
+   * Scrolls the spotlit card into view the moment it mounts.
+   *
+   * Not from the effect that sets the spotlight: that runs before the tab
+   * switch has rendered the new list, so the card does not exist yet and a
+   * requestAnimationFrame fires too early — measured, the ring appeared and
+   * the card stayed off screen. A callback ref runs exactly when the node is
+   * attached, whenever that turns out to be.
+   */
+  const scrolled = useRef<string | null>(null);
+  const spotlightRef = (node: HTMLDivElement | null) => {
+    if (!node || !spotlight || scrolled.current === spotlight) return;
+    scrolled.current = spotlight;
+    node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
 
   const wanted = listings.filter((l) => l.type === 'wanted');
   const offers = listings.filter((l) => l.type === 'offer');
@@ -511,6 +528,33 @@ export default function MarketPage() {
     (n, l) => n + (l.status === 'matched' ? 0 : l.interests.filter((i) => i.status === 'pending').length),
     0,
   );
+
+  /**
+   * Arriving from a notification.
+   *
+   * Read from the URL rather than a search-param hook so the page stays
+   * statically rendered; this only matters after navigation anyway. It runs
+   * once — `listings` changes on every refetch, and without the latch the
+   * screen would yank itself back to the same card each time.
+   *
+   * Being told a curator put you forward is useless if you then have to hunt
+   * for the listing among everyone else's, so this opens the tab the listing
+   * actually lives on and scrolls to it.
+   */
+  const landed = useRef(false);
+  useEffect(() => {
+    if (landed.current || listings.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get('listing');
+    if (!id) return;
+    const target = listings.find((l) => l.id === id);
+    if (!target) return;                 // deleted, or not visible to this member
+    landed.current = true;
+    setTab(target.creator_profile_id === viewerProfileId ? 'mine' : target.type);
+    setSpotlight(id);
+    // Long enough to find it, short enough not to become permanent furniture.
+    const t = setTimeout(() => setSpotlight(null), 4000);
+    return () => clearTimeout(t);
+  }, [listings, viewerProfileId]);
 
   /**
    * One call each — accept_interest and decline_interest run every write
@@ -556,8 +600,19 @@ export default function MarketPage() {
     rows.length === 0 ? <EmptyState title={empty} cn={emptyCn} /> : (
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 11 }}>
         {rows.map((l) => (
-          <MarketCard key={l.id} listing={l} viewerProfileId={viewerProfileId} busyKey={busyKey}
-            onInterest={() => setInterestFor(l)} onAccept={acceptInterest} onReject={rejectInterest} />
+          <div
+            key={l.id}
+            id={`listing-${l.id}`}
+            ref={spotlight === l.id ? spotlightRef : undefined}
+            /* The ring is drawn outside the card rather than on it, so the
+               card's own gold inner rule is not disturbed. */
+            style={spotlight === l.id
+              ? { outline: '3px solid var(--color-gold)', outlineOffset: 3 }
+              : undefined}
+          >
+            <MarketCard listing={l} viewerProfileId={viewerProfileId} busyKey={busyKey}
+              onInterest={() => setInterestFor(l)} onAccept={acceptInterest} onReject={rejectInterest} />
+          </div>
         ))}
       </div>
     );
