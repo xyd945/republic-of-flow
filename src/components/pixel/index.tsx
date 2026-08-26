@@ -440,56 +440,29 @@ export function Avatar({
 /* ---------------------------------------------------------------- sprites */
 
 /** A pixel PNG from the design system, never smoothed. */
+/**
+ * Four of the design's icons cannot be fetched — their pixel data is corrupted
+ * in transit every time — so they are drawn as SVG pixel grids instead (see
+ * scripts/gen-sprites.mjs). Everything else is the design's own artwork as
+ * shipped. This set is the only thing that decides which extension to ask for;
+ * drop a real PNG in and delete the name here and it takes over.
+ */
+const DRAWN = new Set(['nav-journal', 'idea', 'stat-badges', 'nav-constitution']);
+
 export function Sprite({
   name, kind = 'icons', size = 22, className = '', alt = '',
 }: { name: string; kind?: 'icons' | 'sprites' | 'logo'; size?: number; className?: string; alt?: string }) {
+  const ext = DRAWN.has(name) ? 'svg' : 'png';
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={`/ds/${kind}/${name}.png`}
+      src={`/ds/${kind}/${name}.${ext}`}
       alt={alt}
       width={size}
       height={size}
       className={`pixel ${className}`}
       style={{ width: size, height: size, objectFit: 'contain', display: 'block' }}
     />
-  );
-}
-
-/* ------------------------------------------------------------------ crest */
-
-/**
- * The Republic's mark, drawn rather than loaded.
- *
- * There was a logo-mark.png, but it arrived truncated — 192KB exactly, no IEND
- * chunk — and a half-decoded PNG renders as a stripe of garbage rather than
- * failing honestly. Drawing it in the same primitives as everything else costs
- * one component, scales to any size without a second asset, and cannot arrive
- * broken. Swap this for the real artwork once the file is re-exported.
- */
-export function Crest({ size = 96, className = '' }: { size?: number; className?: string }) {
-  const unit = Math.round(size / 12);
-  const corner = { position: 'absolute' as const, width: unit, height: unit, background: 'var(--color-gold)' };
-  return (
-    <div className={`relative ${className}`} aria-hidden style={{
-      width: size, height: size, flex: 'none',
-      background: 'var(--color-navy-700)',
-      border: `${Math.max(2, unit)}px solid var(--color-gold)`,
-      boxShadow: `inset 0 0 0 ${unit}px var(--color-navy-900)`,
-      display: 'grid', placeItems: 'center',
-    }}>
-      <span style={{
-        fontFamily: 'var(--font-display)', fontWeight: 700,
-        /* Integer only — a fractional size knocks the bitmap off the pixel grid. */
-        fontSize: Math.round(size * 0.42),
-        lineHeight: 1, color: 'var(--color-gold)',
-        letterSpacing: 0, transform: `translateY(${Math.round(size * 0.02)}px)`,
-      }}>R</span>
-      <i style={{ ...corner, top: -unit, left: -unit }} />
-      <i style={{ ...corner, top: -unit, right: -unit }} />
-      <i style={{ ...corner, bottom: -unit, left: -unit }} />
-      <i style={{ ...corner, bottom: -unit, right: -unit }} />
-    </div>
   );
 }
 

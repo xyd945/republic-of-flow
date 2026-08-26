@@ -221,7 +221,7 @@ export default function DossierPage() {
       )}
 
       {profile.languages.length > 0 && (
-        <Section title="Languages" cn="语言" icon="globe">
+        <Section title="Languages" cn="语言" icon="stat-badges">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {profile.languages.map((l) => <StatusChip key={l} tone="neutral">{l}</StatusChip>)}
           </div>

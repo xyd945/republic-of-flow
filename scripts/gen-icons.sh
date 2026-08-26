@@ -19,6 +19,9 @@ if [ ! -f "$SRC" ] || [ "$BRAND" -nt "$SRC" ]; then
   TMP=$(mktemp -d)
   sips -s format png -z 1024 1024 "$BRAND" --out "$TMP/m.png" >/dev/null
   python3 scripts/make-app-mark.py "$TMP/m.png" "$SRC"
+  # transparent-ground copy for use inside the app, where a navy tile would
+  # show its edges against the masthead's slightly different navy
+  python3 scripts/make-app-mark.py "$TMP/m.png" public/ds/logo/logo-flat.png alpha
   rm -rf "$TMP"
 fi
 tail -c 8 "$SRC" | xxd -p | grep -q '49454e44ae426082' \

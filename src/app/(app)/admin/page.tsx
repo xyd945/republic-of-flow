@@ -209,7 +209,7 @@ export default function AdminPage() {
       {/* the desk's own head, then the counters in the design's divided strip */}
       <Panel pad={14} tone="navy" innerRule={false}>
         <div className="flex items-center" style={{ gap: 11 }}>
-          <Sprite name="nav-journal" size={26} />
+          <Sprite name="nav-constitution" size={26} />
           <div style={{ minWidth: 0 }}>
             <Bi en="Curator Desk" zh="策展人事务台" color="var(--color-gold)" />
             <div style={{

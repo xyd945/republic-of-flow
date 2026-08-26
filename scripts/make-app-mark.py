@@ -17,6 +17,13 @@ Pure stdlib: this machine has no image library, and sips cannot composite.
 import zlib, struct, sys
 
 SRC, DST = sys.argv[1], sys.argv[2]
+# 'solid' fills the ground with the roundel's own navy — required for an app
+# icon, which is masked to a rounded rectangle and must not be see-through.
+# 'alpha' cuts the ground away instead, so the mark sits on whatever is
+# behind it: on the login masthead a navy tile shows its edges, because the
+# roundel's navy and the masthead's navy are not the same colour.
+MODE = sys.argv[3] if len(sys.argv) > 3 else 'solid'
+ALPHA = MODE == 'alpha'
 
 
 def decode(path):
@@ -55,8 +62,9 @@ def decode(path):
         rows.append(line); prev = line
     return w, h, bpp, rows
 
-def encode(path, w, h, rows):
-    stride = w*3
+def encode(path, w, h, rows, alpha=False):
+    ch = 4 if alpha else 3
+    stride = w*ch
     raw = bytearray()
     for y in range(h):
         raw.append(0); raw += rows[y]
@@ -71,7 +79,7 @@ def encode(path, w, h, rows):
         return c ^ 0xFFFFFFFF
     def chunk(t, d):
         return struct.pack('>I', len(d)) + t + d + struct.pack('>I', crc(t + d) & 0xFFFFFFFF)
-    ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
+    ihdr = struct.pack('>IIBBBBB', w, h, 8, 6 if alpha else 2, 0, 0, 0)
     open(path, 'wb').write(
         b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', ihdr)
         + chunk(b'IDAT', zlib.compress(bytes(raw), 9)) + chunk(b'IEND', b''))
@@ -127,24 +135,28 @@ assert x0 >= 0 and y0 >= 0 and x0 + side <= w and y0 + side <= h, 'crop falls ou
 # arc around the icon. Trimming 0.8% takes the band without touching the ring.
 EDGE, FEATHER = 0.992, 0.006
 
+CH = 4 if ALPHA else 3
 out = []
 for oy in range(side):
     y = y0 + oy
-    src, dst = rows[y], bytearray(side * 3)
+    src, dst = rows[y], bytearray(side * CH)
     for ox in range(side):
         x = x0 + ox
         # distance in ellipse space; 1.0 is the rim
         e = math.hypot((x - cx) / rx, (y - cy) / ry)
-        o, sp = ox * 3, x * bpp
+        o, sp = ox * CH, x * bpp
+        inside = 1.0
         if e >= EDGE:
-            dst[o], dst[o+1], dst[o+2] = NAVY
+            inside = 0.0
         elif e > EDGE - FEATHER:
-            t = (e - (EDGE - FEATHER)) / FEATHER
-            for k in range(3):
-                dst[o+k] = int(src[sp+k] * (1 - t) + NAVY[k] * t)
-        else:
+            inside = 1.0 - (e - (EDGE - FEATHER)) / FEATHER
+        if ALPHA:
             dst[o], dst[o+1], dst[o+2] = src[sp], src[sp+1], src[sp+2]
+            dst[o+3] = int(255 * inside)
+        else:
+            for k in range(3):
+                dst[o+k] = int(src[sp+k] * inside + NAVY[k] * (1 - inside))
     out.append(dst)
 w = h = side
-encode(DST, w, h, out)
-print(f'  {DST}  {w}x{h}  navy ground, mark centred')
+encode(DST, w, h, out, ALPHA)
+print(f'  {DST}  {w}x{h}  {"transparent" if ALPHA else "navy"} ground, mark centred')

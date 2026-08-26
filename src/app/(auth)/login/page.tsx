@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useI18n } from '@/lib/i18n/context';
 import { LangSwitch, StatusStrip } from '@/components/pixel/shell';
-import { Bi, Button, Crest, ErrorNote, Panel } from '@/components/pixel';
+import { Bi, Button, ErrorNote, Panel, Sprite } from '@/components/pixel';
 
 export default function LoginPage() {
   const [step, setStep] = useState<'email' | 'code'>('email');
@@ -67,7 +67,10 @@ export default function LoginPage() {
             <div style={{ position: 'absolute', top: 10, right: 12 }}>
               <LangSwitch lang={lang} onChange={setLang} />
             </div>
-            <Crest size={84} className="mx-auto" />
+            {/* The real mark, on the navy-ground master so it sits flush on the
+                masthead rather than on a white tile. This was a drawn stand-in
+                while the brand mark could not be fetched whole. */}
+            <Sprite name="logo-flat" kind="logo" size={92} alt="" className="mx-auto" />
             {/* Two lines on purpose: one line of this at h2 with display
                 tracking is wider than a 375px screen, and the frame clips it. */}
             <h1 style={{

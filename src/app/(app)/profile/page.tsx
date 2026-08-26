@@ -456,7 +456,7 @@ export default function ProfilePage() {
 
       {/* introduction */}
       <section>
-        <SectionHeader cn="介绍" className="mb-3">{ui('profile.introduction')}</SectionHeader>
+        <SectionHeader icon="idea" cn="介绍" className="mb-3">{ui('profile.introduction')}</SectionHeader>
         <div style={{ display: 'grid', gap: 12 }}>
           <Field label={ui('profile.personal_intro')} cn="个人介绍">
             <textarea className="rof-input" rows={3} value={fields.intro} onChange={(e) => setField('intro', e.target.value)} placeholder={otherLang(profile.intro, lang)} />
@@ -593,7 +593,7 @@ export default function ProfilePage() {
       {profile.is_curator && (
         <Panel pad={13} tone="navy" innerRule={false}>
           <div className="flex items-center" style={{ gap: 11 }}>
-            <Sprite name="nav-journal" size={24} />
+            <Sprite name="nav-constitution" size={24} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <Bi en={ui('profile.curator_desk')} zh="策展人事务台" color="var(--color-gold)" />
               <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-parchment)', marginTop: 4 }}>
