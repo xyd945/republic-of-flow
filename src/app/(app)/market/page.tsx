@@ -10,8 +10,7 @@ import {
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
-  Avatar, Bi, Button, Divider, EmptyState, ErrorNote, Panel,
-  PixelSpinner, SectionHeader, Sheet, StatusChip,
+  Avatar, Bi, BiText, Button, Divider, EmptyState, ErrorNote, Panel, PixelSpinner, SectionHeader, Sheet, StatusChip,
 } from '@/components/pixel';
 import type { ListingWithCreator, ListingInterest, MatchWithParties, Language } from '@/types';
 
@@ -76,11 +75,11 @@ function RequestRow({
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: 9, padding: 9,
-      border: '2px solid var(--color-line)', background: 'var(--color-white)',
+      padding: 11, border: '2px solid var(--color-line-soft)', background: 'var(--color-white)',
       opacity: interest.status === 'declined' || (!actionable && !settled) ? 0.55 : 1,
     }}>
-      <Avatar initials={interest.profile?.initials ?? '?'} id={interest.profile_id} size={30} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <Avatar initials={interest.profile?.initials ?? '?'} id={interest.profile_id} size={38} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="truncate" style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>
           {interest.profile?.full_name ?? '—'}
@@ -96,14 +95,14 @@ function RequestRow({
         <StatusChip tone="open">{ui('market.accepted')}</StatusChip>
       ) : interest.status === 'declined' ? (
         <StatusChip tone="closed">{ui('market.rejected')}</StatusChip>
-      ) : actionable ? (
-        <div style={{ display: 'flex', gap: 5, flex: 'none' }}>
-          <Button tone="green" size="sm" onClick={onAccept} disabled={locked && !accepting} loading={accepting}>
-            {ui('market.accept')}
-          </Button>
-          <Button tone="secondary" size="sm" onClick={onReject} disabled={locked && !rejecting} loading={rejecting}>
-            {ui('market.reject')}
-          </Button>
+      ) : null}
+      </div>
+      {actionable && interest.status === 'pending' ? (
+        <div style={{ display: 'grid', gap: 8, marginTop: 11 }}>
+          <Button tone="green" size="lg" block cn="接受" onClick={onAccept}
+            disabled={locked && !accepting} loading={accepting}>{ui('market.accept')}</Button>
+          <Button tone="tertiary" size="lg" block cn="婉拒" onClick={onReject}
+            disabled={locked && !rejecting} loading={rejecting}>{ui('market.reject')}</Button>
         </div>
       ) : null}
     </div>
@@ -202,7 +201,7 @@ function MarketCard({
 
       {isMine ? (
         <div style={{ marginTop: 12 }}>
-          <SectionHeader cn="收到的请求" trailing={
+          <SectionHeader icon="handshake" cn="收到的请求" trailing={
             <span className="rof-label" style={{ color: 'var(--color-faint)' }}>{ui('market.your_listing')}</span>
           } className="mb-2">{ui('market.requests')}</SectionHeader>
           {listing.interests.length === 0 ? (
@@ -565,10 +564,27 @@ export default function MarketPage() {
 
   return (
     <Page>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <Bi en="The Exchange" zh="交易所" color="var(--color-gold)" />
-        <Button tone="gold" size="sm" onClick={() => setShowPublish(true)}>+ {ui('market.new')}</Button>
-      </div>
+      {/* Every screen in the design opens the same way: an eyebrow, a headline
+          that asks something, a line of explanation, then the primary action
+          full width. */}
+      <Panel pad={14} innerRule={false}>
+        <Bi en="Flow Market" zh="市场" color="var(--color-gold)" />
+        <div style={{
+          fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
+          letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
+          color: 'var(--color-ink)', lineHeight: 1.4, marginTop: 9,
+        }}>{lang === 'zh' ? '你想发现什么？' : 'What Do You Want to Discover?'}</div>
+        <div style={{ marginTop: 12 }}>
+          <BiText
+            en="Wanted: I do not know who to ask. Offer: I will open one of my worlds."
+            zh="悬赏：我不知道该找谁。邀请：我愿意打开一个世界。" />
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <Button tone="primary" size="lg" block cn="发布" onClick={() => setShowPublish(true)}>
+            Post to the Market
+          </Button>
+        </div>
+      </Panel>
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
 
@@ -589,7 +605,7 @@ export default function MarketPage() {
       {tab === 'mine' && (
         <div style={{ display: 'grid', gap: 18 }}>
           <section>
-            <SectionHeader cn="收到的" className="mb-3" trailing={
+            <SectionHeader icon="nav-auction" cn="收到的" className="mb-3" trailing={
               awaitingReply > 0
                 ? <span className="rof-label" style={{ color: 'var(--color-red)' }}>{awaitingReply} {ui('market.awaiting_you')}</span>
                 : undefined
@@ -600,7 +616,7 @@ export default function MarketPage() {
           </section>
 
           <section>
-            <SectionHeader cn="已发出" className="mb-3">{ui('market.sent')}</SectionHeader>
+            <SectionHeader icon="handshake" cn="已发出" className="mb-3">{ui('market.sent')}</SectionHeader>
             {mySent.length === 0 ? (
               <EmptyState title={ui('market.nothing_sent')} cn="你还没有表达过兴趣" />
             ) : (

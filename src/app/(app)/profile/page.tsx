@@ -11,8 +11,7 @@ import { CLASSES, DEFAULT_CLASS } from '@/lib/classes';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
-  Avatar, Bi, Button, Divider, ErrorNote, Field, Panel,
-  PixelSpinner, SectionHeader, StatusChip,
+  Avatar, Bi, Button, Divider, ErrorNote, Field, Panel, PixelSpinner, SectionHeader, Sprite, StatusChip,
 } from '@/components/pixel';
 import type { Language, CategoryId, Translatable } from '@/types';
 
@@ -393,18 +392,28 @@ export default function ProfilePage() {
 
   return (
     <Page>
-      {/* who you are, as the Republic sees you */}
+      {/* the head — eyebrow, a headline that asks something, then who you are */}
       <Panel pad={14} corners>
+        <Bi en="Your Dossier" zh="你的档案" color="var(--color-gold)" />
+        <div style={{
+          fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
+          letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
+          color: 'var(--color-ink)', lineHeight: 1.4, marginTop: 9,
+        }}>{lang === 'zh' ? '你想让同学发现你的什么？' : 'What Should the Class Discover?'}</div>
+        <Divider className="my-3" />
         <div className="flex items-center" style={{ gap: 13 }}>
-          <Avatar initials={profile.initials || initialsOf(name)} id={profile.id} size={56} featured={profile.is_featured} />
+          <Avatar initials={profile.initials || initialsOf(name)} id={profile.id} size={60} featured={profile.is_featured} />
           <div style={{ minWidth: 0 }}>
-            <Bi en={`Founder No. ${String(profile.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+            <Bi en={`Founder No. ${String(profile.founder_no).padStart(2, '0')}`}
+              zh={profile.is_curator ? '策展人' : undefined} color="var(--color-gold)" />
             <div style={{
               fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
               letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
               color: 'var(--color-ink)', marginTop: 5, lineHeight: 1.25,
-            }}>{name}</div>
-            <div style={{ marginTop: 6 }}><StatusChip tone="neutral">{className}</StatusChip></div>
+            }}>{name || 'Your name'}</div>
+            <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-muted)', marginTop: 3 }}>
+              {lang === 'zh' ? '暂用姓名首字母作头像。' : 'Initials stand in for a portrait.'}
+            </div>
           </div>
         </div>
       </Panel>
@@ -423,7 +432,7 @@ export default function ProfilePage() {
 
       {/* identity */}
       <section>
-        <SectionHeader cn="身份" className="mb-3">{ui('profile.identity')}</SectionHeader>
+        <SectionHeader icon="nav-journal" cn="身份" className="mb-3">{ui('profile.identity')}</SectionHeader>
         <div style={{ display: 'grid', gap: 12 }}>
           <Field label={ui('profile.full_name')} cn="姓名">
             <input className="rof-input" type="text" value={name} onChange={(e) => setName(e.target.value)} />
@@ -460,7 +469,7 @@ export default function ProfilePage() {
 
       {/* hidden worlds */}
       <section>
-        <SectionHeader cn="隐藏世界" className="mb-3" trailing={
+        <SectionHeader icon="star" cn="隐藏世界" className="mb-3" trailing={
           <Button tone="gold" size="sm" onClick={() => setShowAddWorld(true)}>+ {ui('profile.add')}</Button>
         }>{ui('profile.hidden_worlds')}</SectionHeader>
 
@@ -519,7 +528,7 @@ export default function ProfilePage() {
 
       {/* ask me about */}
       <section>
-        <SectionHeader cn="可以问我" className="mb-3">{ui('profile.ask_me')}</SectionHeader>
+        <SectionHeader icon="handshake" cn="可以问我" className="mb-3">{ui('profile.ask_me')}</SectionHeader>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 9 }}>
           {askTopics.map((topic, i) => (
             <Tag key={i} text={topic.text} tone="gold" onRemove={() => setAskTopics(askTopics.filter((_, j) => j !== i))} />
@@ -536,7 +545,7 @@ export default function ProfilePage() {
 
       {/* i want to */}
       <section>
-        <SectionHeader cn="我想要" className="mb-3">{ui('profile.i_want')}</SectionHeader>
+        <SectionHeader icon="nav-discover" cn="我想要" className="mb-3">{ui('profile.i_want')}</SectionHeader>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 9 }}>
           {wantTopics.map((topic, i) => (
             <Tag key={i} text={topic.text} tone="sage" onRemove={() => setWantTopics(wantTopics.filter((_, j) => j !== i))} />
@@ -553,7 +562,7 @@ export default function ProfilePage() {
 
       {/* contact */}
       <section>
-        <SectionHeader cn="联系方式" className="mb-3">{ui('profile.contact_pref')}</SectionHeader>
+        <SectionHeader icon="globe" cn="联系方式" className="mb-3">{ui('profile.contact_pref')}</SectionHeader>
         <div style={{ display: 'grid', gap: 12 }}>
           <Field label={ui('profile.method')} cn="方式">
             <select className="rof-input" value={contactKind} onChange={(e) => setContactKind(e.target.value as typeof contactKind)}>
@@ -582,22 +591,25 @@ export default function ProfilePage() {
       <Divider />
 
       {profile.is_curator && (
-        <Panel pad={12} tone="navy" innerRule={false}
-          ariaLabel={ui('profile.curator_desk')}
-          onClick={() => router.push('/admin')}>
-          <div className="flex items-center" style={{ gap: 10 }}>
-            <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)' }}>[*]</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <Bi en={ui('profile.curator_desk')} zh="策展人" color="var(--color-gold)" size="var(--text-h3)" />
-            </span>
-            <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)' }}>&gt;</span>
+        <Panel pad={13} tone="navy" innerRule={false}>
+          <div className="flex items-center" style={{ gap: 11 }}>
+            <Sprite name="nav-journal" size={24} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <Bi en={ui('profile.curator_desk')} zh="策展人事务台" color="var(--color-gold)" />
+              <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-parchment)', marginTop: 4 }}>
+                {lang === 'zh' ? '邀请、审核、推荐匹配' : 'Invites, moderation, suggested matches'}
+              </div>
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <Button tone="gold" size="lg" block cn="打开事务台" onClick={() => router.push('/admin')}>
+              Open the Desk
+            </Button>
           </div>
         </Panel>
       )}
 
-      <div>
-        <Button tone="secondary" size="sm" onClick={signOut}>{ui('auth.sign_out')}</Button>
-      </div>
+      <Button tone="tertiary" size="lg" block cn="退出登录" onClick={signOut}>{ui('auth.sign_out')}</Button>
 
       {/* The save bar sticks to the bottom of the scrolling <main>, not the
           viewport: the tab bar is a flex sibling of that region, so a fixed

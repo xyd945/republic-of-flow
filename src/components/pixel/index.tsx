@@ -493,6 +493,20 @@ export function Crest({ size = 96, className = '' }: { size?: number; className?
   );
 }
 
+/* --------------------------------------------------------------- meta row */
+
+/** A pixel icon beside a line of small text — the dossier's record lines. */
+export function MetaRow({ icon, children }: { icon: string; children: ReactNode }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 7,
+      fontFamily: 'var(--font-body)', fontSize: 'var(--text-small)', color: 'var(--color-muted)',
+    }}>
+      <Sprite name={icon} size={14} />{children}
+    </span>
+  );
+}
+
 /* ------------------------------------------------------------- stat strip */
 
 /**

@@ -9,23 +9,9 @@ import { CLASSES, type ClassName } from '@/lib/classes';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
-  Avatar, Bi, Button, ErrorNote, Field, Panel,
-  PixelSpinner, Sheet, StatusChip,
+  Avatar, Bi, Button, ErrorNote, Field, Panel, PixelSpinner, Ribbon, Sheet, Sprite, StatRow, StatusChip,
 } from '@/components/pixel';
 import type { MatchWithParties } from '@/types';
-
-/** One figure on the navy overview slab. */
-function StatBlock({ value, label, cn }: { value: number; label: string; cn: string }) {
-  return (
-    <div className="text-center">
-      <div style={{
-        fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
-        color: 'var(--color-gold)', lineHeight: 1,
-      }}>{value}</div>
-      <div style={{ marginTop: 6 }}><Bi en={label} zh={cn} color="rgba(245,237,216,0.72)" /></div>
-    </div>
-  );
-}
 
 /** Result of a curator action. Green for done, red for refused. */
 function Notice({ tone, children }: { tone: 'ok' | 'err'; children: React.ReactNode }) {
@@ -220,16 +206,26 @@ export default function AdminPage() {
 
   return (
     <Page>
-      {/* the overview slab */}
-      <Panel pad={15} tone="navy" corners>
-        <Bi en={ui('admin.overview')} zh="总览" color="var(--color-gold)" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 14 }}>
-          <StatBlock value={activeCount} label={ui('admin.profiles')} cn="成员" />
-          <StatBlock value={wantedCount} label={ui('admin.wanted')} cn="需求" />
-          <StatBlock value={offerCount} label={ui('admin.offers')} cn="供给" />
-          <StatBlock value={matches.length} label={ui('admin.matches')} cn="配对" />
+      {/* the desk's own head, then the counters in the design's divided strip */}
+      <Panel pad={14} tone="navy" innerRule={false}>
+        <div className="flex items-center" style={{ gap: 11 }}>
+          <Sprite name="nav-journal" size={26} />
+          <div style={{ minWidth: 0 }}>
+            <Bi en="Curator Desk" zh="策展人事务台" color="var(--color-gold)" />
+            <div style={{
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+              letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
+              color: 'var(--color-parchment)', marginTop: 6, lineHeight: 1.3,
+            }}>{lang === 'zh' ? '维护共和国的真实' : 'Keep the Republic Honest'}</div>
+          </div>
         </div>
       </Panel>
+
+      <StatRow stats={[
+        { icon: 'stat-friends', value: activeCount, label: 'Dossiers', cn: '档案' },
+        { icon: 'nav-auction', value: wantedCount + offerCount, label: 'Listings', cn: '列表' },
+        { icon: 'handshake', value: matches.length, label: 'Matches', cn: '匹配' },
+      ]} />
 
       <DeskTabs
         items={[
@@ -432,6 +428,8 @@ export default function AdminPage() {
           {inviteState && <Notice tone={inviteState.tone}>{inviteState.msg}</Notice>}
         </div>
       )}
+
+      <Ribbon cn="没有算法，只有人的判断">No Algorithm. Human Judgment.</Ribbon>
 
       {confirmOff && (
         <Sheet

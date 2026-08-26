@@ -8,8 +8,7 @@ import { usePeople } from '@/lib/data/views';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
-  Avatar, Bi, Button, Divider, EmptyState, Panel,
-  PixelSpinner, SectionHeader, StatusChip,
+  Avatar, Bi, Button, Divider, EmptyState, MetaRow, Panel, PixelSpinner, SectionHeader, StatRow, StatusChip,
 } from '@/components/pixel';
 
 const CONTACT_LABELS: Record<string, { en: string; zh: string }> = {
@@ -94,54 +93,83 @@ export default function DossierPage() {
     }
   };
 
-  const Section = ({ title, cn, children }: { title: string; cn: string; children: React.ReactNode }) => (
+  const Section = ({ title, cn, icon, children }: { title: string; cn: string; icon?: string; children: React.ReactNode }) => (
     <section>
-      <SectionHeader cn={cn} className="mb-3">{title}</SectionHeader>
+      <SectionHeader icon={icon} cn={cn} className="mb-3">{title}</SectionHeader>
       {children}
     </section>
   );
 
   return (
     <Page>
-      {/* the plate */}
-      <Panel pad={16} corners>
-        <div className="flex flex-col items-center text-center">
+      {/* the record head — the design sets the avatar to the left with the
+          name beside it, not centred, and files the role as a gold chip. */}
+      <Panel pad={14} corners>
+        <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
           <Avatar initials={profile.initials} id={profile.id} size={72} featured={profile.is_featured} />
-          <div style={{ marginTop: 12 }}>
-            <Bi en={`Founder No. ${String(profile.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
-          </div>
-          <h1 style={{
-            margin: '7px 0 0', fontFamily: 'var(--font-display)', fontWeight: 700,
-            fontSize: 'var(--text-h2)', letterSpacing: 'var(--tracking-display)',
-            textTransform: 'uppercase', color: 'var(--color-ink)', lineHeight: 1.25,
-          }}>{profile.full_name}</h1>
-          {profile.native_name ? <div className="rof-cjk" style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink-2)', marginTop: 4 }}>{profile.native_name}</div> : null}
-          {t(profile.headline) ? <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-muted)', marginTop: 8 }}>{t(profile.headline)}</div> : null}
-          <div className="flex items-center justify-center" style={{ gap: 6, marginTop: 11, flexWrap: 'wrap' }}>
-            <StatusChip tone="neutral">{profile.class_name}</StatusChip>
-            {profile.is_featured ? <StatusChip tone="matched" cn="推荐">Featured</StatusChip> : null}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <Bi en={`No. ${String(profile.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+            <div style={{
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
+              letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
+              color: 'var(--color-ink)', lineHeight: 1.25, marginTop: 5,
+            }}>{profile.full_name}</div>
+            {profile.native_name ? (
+              <div className="rof-cjk" style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink-2)', marginTop: 3 }}>
+                {profile.native_name}
+              </div>
+            ) : null}
+            {/* A real role can be long ("Partner, Green Horizon Ventures"), and
+                Bi is nowrap by default — unwrapped it pushed the chip straight
+                through the side of the panel and the frame clipped it. */}
+            {t(profile.role) ? (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', marginTop: 8, padding: '4px 8px',
+                maxWidth: '100%', background: 'var(--color-gold-tint)',
+                border: '2px solid var(--color-gold)',
+              }}>
+                <Bi en={t(profile.role)} color="var(--color-navy-900)" wrap />
+              </span>
+            ) : null}
           </div>
         </div>
+
+        <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
+          <MetaRow icon="globe">Republic of Flow</MetaRow>
+          <MetaRow icon="nav-journal">{profile.class_name}</MetaRow>
+        </div>
+
+        {t(profile.intro) ? (
+          <div style={{
+            marginTop: 12, padding: '10px 12px', background: 'var(--color-white)',
+            border: '2px dashed var(--color-line-soft)',
+          }}>
+            <div style={{ fontSize: 'var(--text-body)', lineHeight: 1.6, color: 'var(--color-ink)' }}>
+              {t(profile.intro)}
+            </div>
+          </div>
+        ) : null}
       </Panel>
 
+      <StatRow stats={[
+        { icon: 'stat-worlds', value: worlds.length, label: 'Worlds', cn: '隐藏世界' },
+        { icon: 'handshake', value: profile.ask_topics.length, label: 'Can Open', cn: '可以打开' },
+        { icon: 'globe', value: profile.languages.length, label: 'Languages', cn: '语言' },
+      ]} />
+
       {/* about */}
-      {(t(profile.role) || t(profile.intro) || t(profile.professional)) && (
-        <Section title="About" cn="关于">
-          <Panel pad={14}>
-            {t(profile.role) ? <div style={{ fontSize: 'var(--text-h3)', color: 'var(--color-ink)' }}>{t(profile.role)}</div> : null}
-            {t(profile.intro) ? <p style={{ margin: '9px 0 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>{t(profile.intro)}</p> : null}
-            {t(profile.professional) ? (
-              <>
-                <Divider className="my-3" />
-                <p style={{ margin: 0, fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>{t(profile.professional)}</p>
-              </>
-            ) : null}
+      {t(profile.professional) ? (
+        <Section title="Background" cn="职业背景" icon="chart">
+          <Panel pad={13} innerRule={false}>
+            <p style={{ margin: 0, fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
+              {t(profile.professional)}
+            </p>
           </Panel>
         </Section>
-      )}
+      ) : null}
 
       {/* hidden worlds — the point of the whole app */}
-      <Section title="Hidden Worlds" cn="隐藏世界">
+      <Section title="Hidden Worlds" cn="隐藏世界" icon="star">
         {worlds.length ? (
           <div style={{ display: 'grid', gap: 9 }}>
             {worlds.map((w) => {
@@ -167,7 +195,7 @@ export default function DossierPage() {
 
       {/* topics */}
       {profile.ask_topics.length > 0 && (
-        <Section title="Ask Me About" cn="可以问我">
+        <Section title="I Can Open" cn="我可以打开" icon="handshake">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {profile.ask_topics.map((a, i) => (
               <span key={i} className="rof-label" style={{
@@ -180,7 +208,7 @@ export default function DossierPage() {
       )}
 
       {profile.want_topics.length > 0 && (
-        <Section title="I Want To" cn="我想要">
+        <Section title="I Want to Discover" cn="我想探索" icon="nav-discover">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {profile.want_topics.map((w, i) => (
               <span key={i} className="rof-label" style={{
@@ -193,7 +221,7 @@ export default function DossierPage() {
       )}
 
       {profile.languages.length > 0 && (
-        <Section title="Languages" cn="语言">
+        <Section title="Languages" cn="语言" icon="globe">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {profile.languages.map((l) => <StatusChip key={l} tone="neutral">{l}</StatusChip>)}
           </div>
@@ -201,7 +229,7 @@ export default function DossierPage() {
       )}
 
       {/* contact — the Republic gets out of the way here */}
-      <Section title="Preferred Contact" cn="联系方式">
+      <Section title="Connect" cn="联系方式" icon="handshake">
         <Panel pad={13} tone="gold">
           <Bi en={contact.en} zh={contact.zh} color="var(--color-navy-900)" />
           {profile.contact_value ? (
