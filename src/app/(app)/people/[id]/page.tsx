@@ -134,7 +134,7 @@ export default function DossierPage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 6, marginTop: 12 }}>
           <MetaRow icon="globe">Republic of Flow</MetaRow>
           <MetaRow icon="nav-journal">{profile.class_name}</MetaRow>
         </div>
@@ -171,7 +171,7 @@ export default function DossierPage() {
       {/* hidden worlds — the point of the whole app */}
       <Section title="Hidden Worlds" cn="隐藏世界" icon="star">
         {worlds.length ? (
-          <div style={{ display: 'grid', gap: 9 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 9 }}>
             {worlds.map((w) => {
               const cat = CATEGORIES.find((c) => c.id === w.category);
               return (

@@ -241,7 +241,7 @@ export default function AdminPage() {
 
       {/* people */}
       {tab === 'people' && (
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8 }}>
           {profiles.map((p) => (
             <Panel key={p.id} pad={10} innerRule={false} style={{ opacity: p.is_active ? 1 : 0.55 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -300,7 +300,7 @@ export default function AdminPage() {
 
       {/* listings */}
       {tab === 'listings' && (
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8 }}>
           {listings.length === 0 && (
             <div className="text-center" style={{ padding: '24px 0', fontSize: 'var(--text-body)', color: 'var(--color-muted)' }}>
               {ui('admin.no_listings')}
@@ -336,7 +336,7 @@ export default function AdminPage() {
               {ui('admin.no_matches')}
             </div>
           )}
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8 }}>
             {matches.map((m) => {
               const closed = m.status === 'closed';
               return (
@@ -377,7 +377,7 @@ export default function AdminPage() {
           <p style={{ margin: '0 0 13px', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
             {ui('admin.suggest_desc')}
           </p>
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
             <Field label={ui('admin.wanted_listing')} cn="需求条目">
               <select className="rof-input" value={suggestListing} onChange={(e) => setSuggestListing(e.target.value)}>
                 <option value="">{ui('admin.select_listing')}</option>
@@ -411,7 +411,7 @@ export default function AdminPage() {
           <p style={{ margin: '0 0 13px', fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
             {ui('admin.invite_desc')}
           </p>
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
             <Field label={ui('auth.email')} cn="邮箱">
               <input className="rof-input" type="email" value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)} placeholder="classmate@school.edu" />

@@ -113,11 +113,20 @@ function mergeDrafts(
 
 // Guard against extra/trailing spaces producing "undefined" initials.
 // A single-word name uses its first two letters rather than one lonely letter.
+/**
+ * Two characters, whatever the name.
+ *
+ * Uppercase FIRST, then take two — the other order lets a ligature expand
+ * after the slice: "ﬃ" sliced to two characters and then uppercased is "FFI",
+ * three glyphs, which overflows the avatar it is drawn in. Sliced by code
+ * point rather than by UTF-16 unit so a surrogate pair (an emoji, or a rarer
+ * CJK glyph) is never cut in half.
+ */
 function initialsOf(fullName: string): string {
   const words = fullName.split(/\s+/).filter(Boolean);
   if (words.length === 0) return '';
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
+  const raw = words.length === 1 ? words[0] : words[0][0] + words[1][0];
+  return [...raw.toUpperCase()].slice(0, 2).join('');
 }
 
 export default function ProfilePage() {
@@ -433,7 +442,7 @@ export default function ProfilePage() {
       {/* identity */}
       <section>
         <SectionHeader icon="nav-journal" cn="身份" className="mb-3">{ui('profile.identity')}</SectionHeader>
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <Field label={ui('profile.full_name')} cn="姓名">
             <input className="rof-input" type="text" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
@@ -457,7 +466,7 @@ export default function ProfilePage() {
       {/* introduction */}
       <section>
         <SectionHeader icon="idea" cn="介绍" className="mb-3">{ui('profile.introduction')}</SectionHeader>
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <Field label={ui('profile.personal_intro')} cn="个人介绍">
             <textarea className="rof-input" rows={3} value={fields.intro} onChange={(e) => setField('intro', e.target.value)} placeholder={otherLang(profile.intro, lang)} />
           </Field>
@@ -473,7 +482,7 @@ export default function ProfilePage() {
           <Button tone="gold" size="sm" onClick={() => setShowAddWorld(true)}>+ {ui('profile.add')}</Button>
         }>{ui('profile.hidden_worlds')}</SectionHeader>
 
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8 }}>
           {worlds.map((w) => {
             const cat = CATEGORIES.find((c) => c.id === w.category);
             return (
@@ -508,7 +517,7 @@ export default function ProfilePage() {
 
         {showAddWorld && (
           <Panel pad={12} className="mt-3" innerRule={false}>
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
               <Field label={ui('profile.world_name')} cn="名称">
                 <input className="rof-input" type="text" value={newWorldName} onChange={(e) => setNewWorldName(e.target.value)} placeholder={ui('profile.world_placeholder')} />
               </Field>
@@ -563,7 +572,7 @@ export default function ProfilePage() {
       {/* contact */}
       <section>
         <SectionHeader icon="globe" cn="联系方式" className="mb-3">{ui('profile.contact_pref')}</SectionHeader>
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <Field label={ui('profile.method')} cn="方式">
             <select className="rof-input" value={contactKind} onChange={(e) => setContactKind(e.target.value as typeof contactKind)}>
               <option value="whatsapp">WhatsApp</option>

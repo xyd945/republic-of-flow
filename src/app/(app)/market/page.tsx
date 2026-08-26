@@ -98,7 +98,7 @@ function RequestRow({
       ) : null}
       </div>
       {actionable && interest.status === 'pending' ? (
-        <div style={{ display: 'grid', gap: 8, marginTop: 11 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8, marginTop: 11 }}>
           <Button tone="green" size="lg" block cn="接受" onClick={onAccept}
             disabled={locked && !accepting} loading={accepting}>{ui('market.accept')}</Button>
           <Button tone="tertiary" size="lg" block cn="婉拒" onClick={onReject}
@@ -208,7 +208,7 @@ function MarketCard({
             <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-faint)' }}>{ui('market.no_requests')}</div>
           ) : (
             <>
-              <div style={{ display: 'grid', gap: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 6 }}>
                 {listing.interests.map((i) => (
                   <RequestRow key={i.id} interest={i} actionable={!isMatched} busyKey={busyKey}
                     onAccept={() => onAccept(i)} onReject={() => onReject(i)} />
@@ -554,7 +554,7 @@ export default function MarketPage() {
 
   const listFor = (rows: ListingWithCreator[], empty: string, emptyCn: string) =>
     rows.length === 0 ? <EmptyState title={empty} cn={emptyCn} /> : (
-      <div style={{ display: 'grid', gap: 11 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 11 }}>
         {rows.map((l) => (
           <MarketCard key={l.id} listing={l} viewerProfileId={viewerProfileId} busyKey={busyKey}
             onInterest={() => setInterestFor(l)} onAccept={acceptInterest} onReject={rejectInterest} />
@@ -603,7 +603,7 @@ export default function MarketPage() {
       {tab === 'offer' && listFor(offers, ui('market.no_offers'), '还没有供给')}
 
       {tab === 'mine' && (
-        <div style={{ display: 'grid', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 18 }}>
           <section>
             <SectionHeader icon="nav-auction" cn="收到的" className="mb-3" trailing={
               awaitingReply > 0
@@ -620,7 +620,7 @@ export default function MarketPage() {
             {mySent.length === 0 ? (
               <EmptyState title={ui('market.nothing_sent')} cn="你还没有表达过兴趣" />
             ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8 }}>
                 {mySent.map((l) => <SentRow key={l.id} listing={l} />)}
               </div>
             )}
@@ -632,7 +632,7 @@ export default function MarketPage() {
         liveMatches.length === 0
           ? <EmptyState title={ui('market.no_matches')} cn="还没有配对" />
           : (
-            <div style={{ display: 'grid', gap: 11 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 11 }}>
               {liveMatches.map((m) => <MatchCard key={m.id} match={m} onDone={() => {}} />)}
             </div>
           )
