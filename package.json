@@ -10,7 +10,9 @@
     "preview": "npx @opennextjs/cloudflare build && npx wrangler dev",
     "deploy": "npx @opennextjs/cloudflare build && npx wrangler deploy",
     "gen:types": "node --env-file=.env.local --experimental-strip-types scripts/gen-types.ts",
-    "test:authz": "node --env-file=.env.local --experimental-strip-types --test tests/authorization.test.ts"
+    "test:authz": "node --env-file=.env.local --experimental-strip-types --test tests/authorization.test.ts",
+    "test:settling": "node --test --experimental-strip-types tests/settling.test.ts",
+    "test:initials": "node --test --experimental-strip-types tests/initials.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
