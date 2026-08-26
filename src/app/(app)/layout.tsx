@@ -41,7 +41,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   // offers a way back rather than stranding the reader.
   const isDossier = pathname.startsWith('/people/');
   const head = isDossier
-    ? { title: 'Founder Dossier', cn: '创始人档案', back: true }
+    ? { title: 'Dossier', cn: '创始人档案', back: true }
     : TITLES[pathname];
 
   const activeTab =

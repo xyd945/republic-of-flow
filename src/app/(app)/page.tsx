@@ -112,7 +112,7 @@ export default function HomePage() {
             trailing={
               <SecAction en="Shuffle" zh="换一个" onClick={() => setShuffleIdx((i) => i + 1)} />
             }>
-            Discover Someone New
+            Discover
           </SectionHeader>
           <Panel pad={14} corners>
             <div className="flex items-start" style={{ gap: 13 }}>
@@ -143,7 +143,7 @@ export default function HomePage() {
       {/* hidden world of the day */}
       {pick && (
         <section>
-          <SectionHeader icon="star" cn="今日隐藏世界" className="mb-3">Hidden World of the Day</SectionHeader>
+          <SectionHeader icon="star" cn="今日隐藏世界" className="mb-3">Hidden World</SectionHeader>
           <Panel pad={14} ariaLabel={`${ui('dossier.title')} — ${pick.p.full_name}`}
             onClick={() => router.push(`/people/${pick.p.id}`)}>
             <Bi en="Hidden World" zh="隐藏世界" color="var(--color-gold)" />
@@ -168,7 +168,7 @@ export default function HomePage() {
           trailing={
             <SecAction en="All" zh="全部" onClick={() => router.push('/market')} />
           }>
-          In the Market
+          Market
         </SectionHeader>
         <div style={{ display: 'grid', gap: 12 }}>
           {[wanted, offer].filter(Boolean).map((l) => (
