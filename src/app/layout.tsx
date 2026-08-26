@@ -25,6 +25,20 @@ const FONT_HREF =
 export const metadata: Metadata = {
   title: 'Republic of FLOW',
   description: 'A republic without borders. Discover the hidden worlds of your classmates.',
+  manifest: '/manifest.webmanifest',
+  /* Next picks up src/app/icon.png and src/app/apple-icon.png by file
+     convention; naming them here as well keeps the tags stable if those files
+     are ever moved. */
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'FLOW',
+    // The bar sits over the navy masthead, so it must not paint its own ground.
+    statusBarStyle: 'black-translucent',
+  },
 };
 
 export const viewport: Viewport = {
