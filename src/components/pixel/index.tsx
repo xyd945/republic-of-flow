@@ -444,15 +444,22 @@ export function Avatar({
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   const accent = ACCENTS[h % ACCENTS.length];
+  /* Never trust the string. profiles.initials is unconstrained text that a
+     member can write directly, and initialsOf() is not the only way a value
+     gets in there. Two code points is what the box is sized for, and the
+     overflow rule is the backstop for anything that still does not fit —
+     clipped is survivable, spilling through the frame is not. */
+  const shown = [...(initials ?? '')].slice(0, 2).join('');
   return (
     <span style={{
       width: size, height: size, flex: 'none', display: 'grid', placeItems: 'center',
+      overflow: 'hidden',
       background: accent, color: '#F5EDD8',
       border: `var(--bw) solid ${featured ? 'var(--color-gold)' : 'var(--color-navy-900)'}`,
       boxShadow: featured ? 'inset 0 0 0 2px var(--color-gold)' : 'var(--shadow-px)',
       fontFamily: 'var(--font-display)', fontWeight: 700,
       fontSize: initialsSize(size), letterSpacing: '0.02em',
-    }}>{initials}</span>
+    }}>{shown}</span>
   );
 }
 

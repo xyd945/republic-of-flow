@@ -113,11 +113,20 @@ function mergeDrafts(
 
 // Guard against extra/trailing spaces producing "undefined" initials.
 // A single-word name uses its first two letters rather than one lonely letter.
+/**
+ * Two characters, whatever the name.
+ *
+ * Uppercase FIRST, then take two — the other order lets a ligature expand
+ * after the slice: "ﬃ" sliced to two characters and then uppercased is "FFI",
+ * three glyphs, which overflows the avatar it is drawn in. Sliced by code
+ * point rather than by UTF-16 unit so a surrogate pair (an emoji, or a rarer
+ * CJK glyph) is never cut in half.
+ */
 function initialsOf(fullName: string): string {
   const words = fullName.split(/\s+/).filter(Boolean);
   if (words.length === 0) return '';
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
+  const raw = words.length === 1 ? words[0] : words[0][0] + words[1][0];
+  return [...raw.toUpperCase()].slice(0, 2).join('');
 }
 
 export default function ProfilePage() {
