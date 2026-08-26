@@ -381,7 +381,12 @@ export default function AdminPage() {
             <Field label={ui('admin.wanted_listing')} cn="需求条目">
               <select className="rof-input" value={suggestListing} onChange={(e) => setSuggestListing(e.target.value)}>
                 <option value="">{ui('admin.select_listing')}</option>
-                {listings.filter((l) => l.type === 'wanted').map((l) => (
+                {/* Open only: the suggestion tells the member to go and raise
+                    their hand, and raise_interest() refuses anything already
+                    matched, so a closed listing sends them to a dead end. The
+                    function enforces this too — the filter is so a curator
+                    never picks one in the first place. */}
+                {listings.filter((l) => l.type === 'wanted' && l.status === 'open').map((l) => (
                   <option key={l.id} value={l.id}>{t(l.title)}</option>
                 ))}
               </select>
@@ -389,7 +394,12 @@ export default function AdminPage() {
             <Field label={ui('admin.suggest_classmate')} cn="推荐同学">
               <select className="rof-input" value={suggestPerson} onChange={(e) => setSuggestPerson(e.target.value)}>
                 <option value="">{ui('admin.select_person')}</option>
-                {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                {/* Everyone except whoever posted it — suggesting the owner
+                    to themselves sends them two notifications that
+                    contradict each other. */}
+                {profiles
+                  .filter((p) => p.id !== listings.find((l) => l.id === suggestListing)?.creator_profile_id)
+                  .map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
               </select>
             </Field>
             <Field label={ui('admin.why_person')} cn="理由">

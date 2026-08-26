@@ -123,7 +123,8 @@ export type NotificationKind =
   | 'interest_raised'
   | 'interest_accepted'
   | 'interest_declined'
-  | 'suggestion_made'
+  | 'suggestion_made'    // to the listing owner: someone was suggested for it
+  | 'suggested_to_you'   // to the member: a curator put you forward
   | 'match_undone'
   | 'match_met';
 

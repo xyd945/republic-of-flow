@@ -46,6 +46,7 @@ function markFor(kind: AppNotification['kind']): { glyph: string; bg: string; bd
     case 'match_undone':
       return { glyph: '!', bg: 'var(--color-red-tint)', bd: 'var(--color-red)', fg: '#6E2A20' };
     case 'suggestion_made':
+    case 'suggested_to_you':
       return { glyph: '*', bg: 'var(--color-gold-tint)', bd: 'var(--color-gold)', fg: '#6B5223' };
     default:
       return { glyph: '!', bg: 'var(--color-gold-tint)', bd: 'var(--color-gold)', fg: '#6B5223' };
@@ -67,12 +68,18 @@ export function NotificationPanel({
   // registry, so a second open layer cannot corrupt the restore.
   useOverlay(onClose);
 
-  // Every kind of notification is about something in the Market, so they all
-  // land there. The Market's tabs are component state rather than URL state,
-  // so there is no deeper link to make yet without reworking that page.
-  const goTo = () => {
+  /**
+   * Every kind of notification is about something in the Market, so they all
+   * land there — but the ones that name a listing now carry it in the URL.
+   *
+   * That matters most for a suggestion: being told a curator put you forward
+   * is useless if you then have to hunt for the listing among everyone else's.
+   * The Market opens the right tab, scrolls to it and marks it.
+   */
+  const goTo = (n: AppNotification) => {
     onClose();
-    router.push('/market');
+    const id = n.payload.listing_id;
+    router.push(id ? `/market?listing=${encodeURIComponent(String(id))}` : '/market');
   };
 
   return (
@@ -125,7 +132,7 @@ export function NotificationPanel({
               <button
                 key={n.id}
                 type="button"
-                onClick={goTo}
+                onClick={() => goTo(n)}
                 style={{
                   display: 'flex', width: '100%', alignItems: 'flex-start', gap: 10,
                   padding: '11px 13px', textAlign: 'left', cursor: 'pointer',
