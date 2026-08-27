@@ -4,9 +4,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { I18nProvider, useI18n } from '@/lib/i18n/context';
 import { DataProvider } from '@/lib/data/client';
 import { useNotifications } from '@/lib/data/notifications';
+import { useViewerProfile } from '@/lib/data/views';
+import { useClaimMembership } from '@/lib/data/mutations';
 import { NotificationPanel } from '@/components/notification-panel';
 import { StatusStrip, TabBar, TopBar, LangSwitch, BellButton, TABS } from '@/components/pixel/shell';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Titles per route. The Home screen carries its own headline, so it gets the
@@ -36,6 +38,26 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { lang, setLang } = useI18n();
   const notifications = useNotifications();
   const [showNotifications, setShowNotifications] = useState(false);
+
+  /* The claim normally happens on the login screen. If that call was lost —
+     tab closed, connection dropped — the member is signed in with no founder
+     number and is missing from the directory, which they cannot fix from any
+     screen. So try again here. Idempotent, and a no-op for everyone who
+     already has a number, which after the first login is everyone. */
+  const { profile } = useViewerProfile();
+  /* mutate is referentially stable; the mutation object is not, and depending
+     on it would re-run this effect on every state change it makes. */
+  const { mutate: claim } = useClaimMembership();
+  const claimed = useRef(false);
+  useEffect(() => {
+    if (profile && profile.founder_no === null && !claimed.current) {
+      // Once per mount, and deliberately not reset on failure: a claim that
+      // keeps failing would otherwise re-fire on its own error render, in a
+      // loop with no backoff. The next page load is soon enough.
+      claimed.current = true;
+      claim({});
+    }
+  }, [profile, claim]);
 
   // A dossier is a detail view of People, so the tab stays lit and the bar
   // offers a way back rather than stranding the reader.

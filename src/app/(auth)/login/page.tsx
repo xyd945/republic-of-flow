@@ -44,11 +44,18 @@ export default function LoginPage() {
       token: code,
       type: 'email',
     });
-    setLoading(false);
     if (err) {
+      setLoading(false);
       setError(err.message);
       return;
     }
+    /* The founder number is handed out here, on the first real sign-in, rather
+       than when the invitation was sent — otherwise an invitation nobody
+       accepts takes a number with it. Idempotent, so every later login is a
+       no-op. A failure here is not worth blocking entry over: the app shell
+       retries it on load. */
+    await supabase.rpc('claim_membership').then(undefined, () => {});
+    setLoading(false);
     window.location.href = '/';
   };
 

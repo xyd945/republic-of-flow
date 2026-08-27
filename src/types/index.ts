@@ -22,7 +22,9 @@ export interface Profile {
   is_active: boolean;
   is_featured: boolean;
   is_curator: boolean;
-  founder_no: number;
+  /** null until the member actually signs in — an invitation alone earns no
+      number. Allocated by claim_membership(); see migration 00011. */
+  founder_no: number | null;
   created_at: string;
   updated_at: string;
 }

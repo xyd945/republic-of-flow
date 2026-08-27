@@ -413,8 +413,12 @@ export default function ProfilePage() {
         <div className="flex items-center" style={{ gap: 13 }}>
           <Avatar initials={profile.initials || initialsOf(name)} id={profile.id} size={60} featured={profile.is_featured} />
           <div style={{ minWidth: 0 }}>
-            <Bi en={`Founder No. ${String(profile.founder_no).padStart(2, '0')}`}
-              zh={profile.is_curator ? '策展人' : undefined} color="var(--color-gold)" />
+            {/* Blank only in the moment between signing in and the claim
+                landing; the app shell is already retrying it. */}
+            {profile.founder_no !== null ? (
+              <Bi en={`Founder No. ${String(profile.founder_no).padStart(2, '0')}`}
+                zh={profile.is_curator ? '策展人' : undefined} color="var(--color-gold)" />
+            ) : null}
             <div style={{
               fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
               letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',

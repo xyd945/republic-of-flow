@@ -108,7 +108,10 @@ export default function DossierPage() {
         <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
           <Avatar initials={profile.initials} id={profile.id} size={72} featured={profile.is_featured} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <Bi en={`No. ${String(profile.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+            {/* Invited but not yet arrived: no number to show. */}
+            {profile.founder_no !== null ? (
+              <Bi en={`No. ${String(profile.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+            ) : null}
             <div style={{
               fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
               letterSpacing: 'var(--tracking-display)', textTransform: 'uppercase',
