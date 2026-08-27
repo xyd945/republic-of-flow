@@ -6,6 +6,10 @@ import { useI18n } from '@/lib/i18n/context';
 import { LangSwitch, StatusStrip } from '@/components/pixel/shell';
 import { Bi, Button, ErrorNote, Panel, Sprite } from '@/components/pixel';
 
+/** Long enough for a slow phone on classroom wifi, short enough that nobody
+    watches a spinner wondering whether their code worked. */
+const CLAIM_MS = 4000;
+
 export default function LoginPage() {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -52,9 +56,31 @@ export default function LoginPage() {
     /* The founder number is handed out here, on the first real sign-in, rather
        than when the invitation was sent — otherwise an invitation nobody
        accepts takes a number with it. Idempotent, so every later login is a
-       no-op. A failure here is not worth blocking entry over: the app shell
-       retries it on load. */
-    await supabase.rpc('claim_membership').then(undefined, () => {});
+       no-op.
+
+       Bounded, and the result is ignored. By this line the member is already
+       authenticated: an optional call must not be able to hold the door shut,
+       and a stalled fetch never rejects on its own, so without the abort the
+       button would sit on "Verifying..." forever with the session already in
+       hand. Whatever is left undone, the app shell picks up on load. */
+    const ctrl = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    /* Raced, not merely aborted. abortSignal() reaches the fetch, but the
+       client resolves the session before there is a fetch to abort — so a
+       stall in there would leave the await hanging with the signal pointed at
+       nothing. The race is what actually bounds this; the abort is what stops
+       an orphaned request. */
+    const giveUp = new Promise<void>((resolve) => {
+      timer = setTimeout(() => { ctrl.abort(); resolve(); }, CLAIM_MS);
+    });
+    try {
+      await Promise.race([
+        supabase.rpc('claim_membership').abortSignal(ctrl.signal).then(() => {}, () => {}),
+        giveUp,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
     setLoading(false);
     window.location.href = '/';
   };

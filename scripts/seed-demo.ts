@@ -60,6 +60,20 @@ async function seed() {
     await clean();
   }
 
+  /* Refuse to plant thirteen invented classmates in a directory that has real
+     ones. .env.local points at whatever project is configured, and for this
+     repo that has historically been the production one. The fixed founder
+     numbers below would collide with theirs too, but the people are the real
+     reason: seeding is for a throwaway project only. */
+  const real: { full_name: string }[] = await api('/rest/v1/profiles?select=full_name&limit=5');
+  if (real.length) {
+    throw new Error(
+      `refusing to seed: this project already holds ${real.length}+ profile(s) `
+      + `(${real.map((r) => r.full_name).join(', ')}). `
+      + `Point .env.local at a throwaway Supabase project first.`
+    );
+  }
+
   // seed profile id ("p1") -> real profiles.id (uuid)
   const idMap = new Map<string, string>();
 
@@ -95,6 +109,14 @@ async function seed() {
         is_active: p.is_active,
         is_featured: p.is_featured,
         is_curator: p.is_curator,
+        /* Demo people never sign in, so nothing ever calls claim_membership()
+           for them and the row would stay numberless — which since 00011 the
+           database refuses to let them be active with. The fixed numbers in
+           seed.ts stand in for having arrived. They are written directly and
+           so do not move the sequence; claim_membership() steps over numbers
+           already taken, which is what keeps a later real signup from
+           colliding with them. */
+        founder_no: p.founder_no,
       }),
     });
 
