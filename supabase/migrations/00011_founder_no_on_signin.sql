@@ -114,8 +114,14 @@ begin
 
   -- Lock before looking. Two tabs finishing the same login at once must not
   -- both read null and both walk away with a number.
+  --
+  -- Everything below names its schema outright. `set search_path = public` is
+  -- the codebase's habit and is enough against today's roles, but a SECURITY
+  -- DEFINER function that hands out standing should not depend on name
+  -- resolution at all: an unqualified `profiles` can be shadowed through
+  -- pg_temp, and `nextval` through a more specific overload in public.
   select founder_no into v_no
-    from profiles
+    from public.profiles
    where user_id = auth.uid()
      for update;
 
@@ -138,11 +144,13 @@ begin
   -- instead. Terminates — nextval only climbs, and there are finitely many
   -- rows to step over.
   loop
-    v_no := nextval(pg_get_serial_sequence('public.profiles', 'founder_no'));
-    exit when not exists (select 1 from profiles where founder_no = v_no);
+    v_no := pg_catalog.nextval(
+      pg_catalog.pg_get_serial_sequence('public.profiles', 'founder_no')::regclass
+    );
+    exit when not exists (select 1 from public.profiles where founder_no = v_no);
   end loop;
 
-  update profiles
+  update public.profiles
      set founder_no = v_no,
          is_active  = true
    where user_id = auth.uid();
