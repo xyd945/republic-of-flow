@@ -99,6 +99,17 @@ export const useCuratorUpdateMember = () =>
     p_class_name: string | null;
   }>('curator_update_member', [keys.profiles]);
 
+// ---------------------------------------------------------------- membership
+
+/**
+ * Takes a founder number, once. The row already exists — handle_new_user()
+ * makes it when the auth user appears, which is invitation time — but it is
+ * numberless and inactive until the person actually turns up. Idempotent: a
+ * member who already has a number gets it back unchanged.
+ */
+export const useClaimMembership = () =>
+  useRpc<Record<string, never>>('claim_membership', [keys.profiles]);
+
 // ---------------------------------------------------------------- profile
 
 export const useSaveProfile = () =>

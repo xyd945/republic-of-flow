@@ -100,7 +100,9 @@ export default function HomePage() {
 
       {/* the numbers we can actually count, in the design's divided strip */}
       <StatRow stats={[
-        { icon: 'stat-friends', value: profiles.length, label: 'Founders', cn: '创始人' },
+        // A curator's RLS lets them read invited-but-not-yet-arrived rows too,
+        // and those are not founders yet.
+        { icon: 'stat-friends', value: profiles.filter((p) => p.is_active).length, label: 'Founders', cn: '创始人' },
         { icon: 'stat-worlds', value: worldCount, label: 'Worlds', cn: '隐藏世界' },
         { icon: 'handshake', value: openMarket.length, label: 'Open', cn: '进行中' },
       ]} />
@@ -118,7 +120,9 @@ export default function HomePage() {
             <div className="flex items-start" style={{ gap: 13 }}>
               <Avatar initials={spot.initials} id={spot.id} size={64} featured={spot.is_featured} />
               <div style={{ minWidth: 0, flex: 1 }}>
-                <Bi en={`Founder No. ${String(spot.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+                {spot.founder_no !== null ? (
+                  <Bi en={`Founder No. ${String(spot.founder_no).padStart(2, '0')}`} color="var(--color-gold)" />
+                ) : null}
                 <div style={{
                   fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h2)',
                   letterSpacing: 'var(--tracking-display)', color: 'var(--color-ink)', lineHeight: 1.25, marginTop: 5,

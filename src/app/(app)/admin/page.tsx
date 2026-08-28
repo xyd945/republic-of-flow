@@ -53,6 +53,16 @@ function DeskTabs({
   );
 }
 
+/**
+ * PostgREST rejects with a plain object, never an Error, so the usual
+ * `e instanceof Error ? e.message : String(e)` printed "[object Object]" for
+ * every failure the desk can hit — including its own guards, which exist to
+ * say what went wrong.
+ */
+function errText(e: unknown): string {
+  return e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e);
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const { t, lang, ui } = useI18n();
@@ -69,6 +79,10 @@ export default function AdminPage() {
   const [inviteRole, setInviteRole] = useState('');
   const [inviteState, setInviteState] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
   const [matchState, setMatchState] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
+  // patchProfile used to report into matchState, which is only rendered on the
+  // Matches tab — so every failure on the People tab was swallowed in silence,
+  // including a refused activation.
+  const [peopleState, setPeopleState] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
   // Per-control, so one write doesn't disable every button on the desk.
   const [busyKey, setBusyKey] = useState<string | null>(null);
   // Deactivation is the one action here whose effect the curator can never see
@@ -119,6 +133,7 @@ export default function AdminPage() {
     key: string,
   ) => {
     setBusyKey(key);
+    setPeopleState(null);
     try {
       await updateMember.mutateAsync({
         p_profile_id: id,
@@ -127,7 +142,7 @@ export default function AdminPage() {
         p_class_name: patch.class_name ?? null,
       });
     } catch (e) {
-      setMatchState({ tone: 'err', msg: e instanceof Error ? e.message : String(e) });
+      setPeopleState({ tone: 'err', msg: errText(e) });
     } finally {
       setBusyKey(null);
     }
@@ -154,7 +169,7 @@ export default function AdminPage() {
       await dismatchMutation.mutateAsync({ p_match_id: match.id });
       setMatchState({ tone: 'ok', msg: ui('admin.dismatched') });
     } catch (e) {
-      setMatchState({ tone: 'err', msg: e instanceof Error ? e.message : String(e) });
+      setMatchState({ tone: 'err', msg: errText(e) });
     } finally {
       setBusyKey(null);
     }
@@ -179,7 +194,7 @@ export default function AdminPage() {
       setSuggestPerson('');
       setSuggestReason('');
     } catch (e) {
-      setSuggestState({ tone: 'err', msg: e instanceof Error ? e.message : String(e) });
+      setSuggestState({ tone: 'err', msg: errText(e) });
     } finally {
       setBusyKey(null);
     }
@@ -249,6 +264,7 @@ export default function AdminPage() {
       {/* people */}
       {tab === 'people' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 8 }}>
+          {peopleState && <Notice tone={peopleState.tone}>{peopleState.msg}</Notice>}
           {profiles.map((p) => (
             <Panel key={p.id} pad={10} innerRule={false} style={{ opacity: p.is_active ? 1 : 0.55 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -285,19 +301,27 @@ export default function AdminPage() {
                     ariaLabel={`${p.is_featured ? ui('admin.unfeature') : ui('admin.feature')} — ${p.full_name}`}
                     onClick={() => patchProfile(p.id, { is_featured: !p.is_featured }, `${p.id}:feat`)}
                   >{p.is_featured ? '★' : '☆'}</Button>
-                  <Button
-                    tone={p.is_active ? 'green' : 'secondary'}
-                    size="sm"
-                    disabled={busyKey !== null && busyKey !== `${p.id}:active`}
-                    loading={busyKey === `${p.id}:active`}
-                    onClick={() =>
-                      p.is_active
-                        ? setConfirmOff({ id: p.id, name: p.full_name })
-                        : patchProfile(p.id, { is_active: true }, `${p.id}:active`)
-                    }
-                    ariaPressed={p.is_active}
-                    ariaLabel={`${p.is_active ? ui('admin.deactivate') : ui('admin.activate')} — ${p.full_name}`}
-                  >{p.is_active ? 'ON' : 'OFF'}</Button>
+                  {/* An invitation that has not been accepted is a state, not
+                      a switch. ON here used to mean "reinstate someone who
+                      left"; offered against a pending row it would read as
+                      "let them in", which only signing in can do. */}
+                  {p.founder_no === null ? (
+                    <StatusChip tone="neutral">{ui('admin.pending')}</StatusChip>
+                  ) : (
+                    <Button
+                      tone={p.is_active ? 'green' : 'secondary'}
+                      size="sm"
+                      disabled={busyKey !== null && busyKey !== `${p.id}:active`}
+                      loading={busyKey === `${p.id}:active`}
+                      onClick={() =>
+                        p.is_active
+                          ? setConfirmOff({ id: p.id, name: p.full_name })
+                          : patchProfile(p.id, { is_active: true }, `${p.id}:active`)
+                      }
+                      ariaPressed={p.is_active}
+                      ariaLabel={`${p.is_active ? ui('admin.deactivate') : ui('admin.activate')} — ${p.full_name}`}
+                    >{p.is_active ? 'ON' : 'OFF'}</Button>
+                  )}
                 </div>
               </div>
             </Panel>
@@ -406,6 +430,9 @@ export default function AdminPage() {
                     contradict each other. */}
                 {profiles
                   .filter((p) => p.id !== listings.find((l) => l.id === suggestListing)?.creator_profile_id)
+                  // And nobody still pending: the suggestion is a notification,
+                  // and they have no way to read one until they sign in.
+                  .filter((p) => p.founder_no !== null)
                   .map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
               </select>
             </Field>

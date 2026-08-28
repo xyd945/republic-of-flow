@@ -242,6 +242,9 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'admin.match_closed': { en: 'Closed', zh: '已关闭' },
   'admin.no_listings': { en: 'No listings yet', zh: '暂无信息' },
   'admin.unassigned': { en: 'Unassigned', zh: '未分配' },
+  /* An invited member who has not signed in yet: no founder number, not in
+     the directory, and nothing a curator can toggle. */
+  'admin.pending': { en: 'Pending', zh: '待加入' },
   'admin.feature': { en: 'Feature', zh: '设为精选' },
   'admin.unfeature': { en: 'Unfeature', zh: '取消精选' },
   'admin.activate': { en: 'Reactivate', zh: '重新启用' },
