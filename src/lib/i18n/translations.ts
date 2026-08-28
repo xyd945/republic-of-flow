@@ -83,6 +83,8 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'people.title': { en: 'People', zh: '成员' },
   'people.search': { en: 'Search people, interests, skills...', zh: '搜索成员、兴趣、技能…' },
   'people.all': { en: 'All', zh: '全部' },
+  /* Classes 20-25 share one tab; see lib/classes.ts. */
+  'people.alumni': { en: 'Alumni', zh: '校友' },
   'people.count': { en: 'people', zh: '位成员' },
   'people.none': { en: 'No people found', zh: '没有找到成员' },
   'people.adjust': { en: 'Try adjusting your filters', zh: '试试调整筛选条件' },

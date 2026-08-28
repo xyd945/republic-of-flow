@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n/context';
 import { CATEGORIES } from '@/lib/i18n/translations';
 import { usePeople } from '@/lib/data/views';
-import { CLASSES } from '@/lib/classes';
+import { ALUMNI_FILTER, CURRENT_CLASSES, isAlumniClass } from '@/lib/classes';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import { Avatar, Bi, EmptyState, Panel, PixelSpinner, StatusChip } from '@/components/pixel';
@@ -27,7 +27,8 @@ export default function PeoplePage() {
 
   const filtered = useMemo(() => {
     let list = profiles.filter((p) => p.is_active);
-    if (classFilter !== 'all') list = list.filter((p) => p.class_name === classFilter);
+    if (classFilter === ALUMNI_FILTER) list = list.filter((p) => isAlumniClass(p.class_name));
+    else if (classFilter !== 'all') list = list.filter((p) => p.class_name === classFilter);
     if (catFilter) list = list.filter((p) => p.hidden_worlds.some((hw) => hw.category === catFilter));
     const q = search.trim().toLowerCase();
     if (q) {
@@ -49,7 +50,14 @@ export default function PeoplePage() {
   }
   if (error) return <LoadError message={error} onRetry={() => window.location.reload()} />;
 
-  const CLASS_TABS = [{ id: 'all', label: ui('people.all') }, ...CLASSES.map((c) => ({ id: c, label: c }))];
+  /* The current cohorts get a tab each; every earlier year shares one. Listing
+     all eight pushed Class 26 and 27 off the edge of a phone screen, and those
+     are the two filters almost anyone here actually wants. */
+  const CLASS_TABS = [
+    { id: 'all', label: ui('people.all') },
+    ...CURRENT_CLASSES.map((c) => ({ id: c, label: c })),
+    { id: ALUMNI_FILTER, label: ui('people.alumni') },
+  ];
 
   return (
     <Page>
