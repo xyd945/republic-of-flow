@@ -11,36 +11,42 @@ import { CLASSES, DEFAULT_CLASS } from '@/lib/classes';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
-  Avatar, Bi, Button, Divider, ErrorNote, Field, Panel, PixelSpinner, SectionHeader, Sprite, StatusChip,
+  Avatar, Bi, Button, Divider, ErrorNote, Field, Panel, PixelSpinner, SectionHeader, Sprite,
 } from '@/components/pixel';
 import type { Language, CategoryId, Translatable } from '@/types';
 
 /**
- * Editing counterpart to i18n `t()`, and deliberately stricter: it must NOT
- * fall through to another language. An empty field means "no translation yet
- * in this language" — borrowing the English text here would save it straight
- * back into the Chinese field, because the form has no way to tell a real
- * translation apart from a fallback it displayed a moment ago.
+ * A member's own words are ONE text, in whatever language they wrote it.
  *
- * That is exactly what used to happen: this returned `obj[lang] ?? obj.en`,
- * so any save made while the UI was in Chinese stamped the English text into
- * the `zh` key of every field the member had not touched.
+ * These four fields used to hold a separate English and Chinese version, and
+ * the editor showed only the one matching the current UI language — so a
+ * background typed in English was an empty box in Chinese mode, and the only
+ * way to correct a typo was to retype the paragraph. That was never asked
+ * for. It came from making every string in the app bilingual by reflex, which
+ * conflates the app's own chrome (buttons, labels, which genuinely need both)
+ * with what a member wrote about themselves (which does not).
+ *
+ * The stored shape stays jsonb so nothing else has to change, and t() already
+ * falls back across languages, so every screen has always displayed these
+ * correctly. Only the editor was strict. Now it reads what t() reads and
+ * writes back a single entry, which also collapses any row that already
+ * carried two.
  */
-function tVal(obj: Translatable | string | null | undefined, lang: Language): string {
-  if (!obj) return '';
-  if (typeof obj === 'string') return obj;
-  return obj[lang] ?? '';
-}
-
-/**
- * What the field says in the OTHER language, shown as placeholder text.
- * Since tVal no longer falls through, a Chinese-mode field holding only
- * English renders empty — without this hint that reads as a lost profile
- * rather than as an untranslated field.
- */
-function otherLang(obj: Translatable | string | null | undefined, lang: Language): string {
-  if (!obj || typeof obj === 'string') return '';
-  return obj[lang === 'en' ? 'zh' : 'en'] ?? '';
+function oneValue(
+  stored: Translatable | string | null | undefined,
+  lang: Language,
+  text: string,
+): Translatable {
+  const trimmed = text.trim();
+  if (!trimmed) return {};
+  // Keep the key the words already lived under. Nothing reads the key — t()
+  // falls back — so moving them between slots on every save would be churn in
+  // the row and in anyone's diff, for no visible difference.
+  const existing =
+    stored && typeof stored === 'object'
+      ? (Object.keys(stored) as Language[]).find((k) => (stored[k] ?? '').trim())
+      : undefined;
+  return { [existing ?? lang]: trimmed };
 }
 
 /**
@@ -75,40 +81,18 @@ function draftValue({ original, text, lang }: Draft, fallback: Language): Transl
   return original ?? mergeLang(null, lang ?? fallback, text);
 }
 
-/** The four free-text fields that carry a translation. */
+/** The four free-text fields a member writes in their own words. */
 type TransFields = { headline: string; role: string; intro: string; professional: string };
 
 const EMPTY_FIELDS: TransFields = { headline: '', role: '', intro: '', professional: '' };
 
 function fieldsFor(profile: { headline: unknown; role: unknown; intro: unknown; professional: unknown }, lang: Language): TransFields {
   return {
-    headline: tVal(profile.headline as Translatable, lang),
-    role: tVal(profile.role as Translatable, lang),
-    intro: tVal(profile.intro as Translatable, lang),
-    professional: tVal(profile.professional as Translatable, lang),
+    headline: t(profile.headline as Translatable, lang),
+    role: t(profile.role as Translatable, lang),
+    intro: t(profile.intro as Translatable, lang),
+    professional: t(profile.professional as Translatable, lang),
   };
-}
-
-/**
- * Fold every language the member has drafted into the stored value, so one
- * save writes both translations. A language never opened has no draft and is
- * therefore left exactly as it was.
- */
-function mergeDrafts(
-  stored: Translatable | null | undefined,
-  drafts: Record<string, TransFields>,
-  seeds: Record<string, TransFields>,
-  key: keyof TransFields,
-): Translatable {
-  let out: Translatable = stored && typeof stored === 'object' ? { ...stored } : {};
-  for (const [lang, fields] of Object.entries(drafts)) {
-    // Untouched since it was seeded, so leave the stored value exactly as it
-    // is. Merging it back would rewrite the row for no reason — and since
-    // mergeLang trims, simply LOOKING at a language would quietly reformat it.
-    if (seeds[lang]?.[key] === fields[key]) continue;
-    out = mergeLang(out, lang as Language, fields[key]);
-  }
-  return out;
 }
 
 // Guard against extra/trailing spaces producing "undefined" initials.
@@ -131,7 +115,7 @@ function initialsOf(fullName: string): string {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { lang, setLang, ui } = useI18n();
+  const { lang, ui } = useI18n();
   const { profile, loading, error: loadError, refreshing } = useViewerProfile();
   const signOut = useSignOut();
   const save = useSaveProfile();
@@ -140,17 +124,21 @@ export default function ProfilePage() {
   const [nativeName, setNativeName] = useState('');
   const [className, setClassName] = useState<string>(DEFAULT_CLASS);
   /**
-   * One draft per language, not one set of fields for whichever language is
-   * showing. The form used to re-read every field from the profile whenever
-   * `lang` changed, so switching to Chinese to add a translation threw away
-   * the English edit you had just made — the exact workflow this change is
-   * meant to enable. Drafts persist across switches and all of them are
-   * written by a single save.
+   * One set of fields, full stop. There used to be one draft per language
+   * plus a seed to tell an edit from a language merely opened — machinery
+   * that existed only to keep two versions of the same paragraph from
+   * clobbering each other. There is one version now, so switching language
+   * does not touch what is in the boxes.
    */
-  const [drafts, setDrafts] = useState<Record<string, TransFields>>({});
-  // What each language looked like when its draft was seeded, so we can tell
-  // an edit apart from a language the member merely opened and read.
-  const [seeds, setSeeds] = useState<Record<string, TransFields>>({});
+  const [fields, setFields] = useState<TransFields>(EMPTY_FIELDS);
+  /**
+   * What the four boxes held when the form was filled from the server. A field
+   * the member never touched is written back byte-for-byte rather than through
+   * oneValue(), so somebody who came to change their WeChat handle cannot
+   * silently destroy the second language of a row that still carries one.
+   * Only a field they actually edited collapses to a single version.
+   */
+  const [initial, setInitial] = useState<TransFields>(EMPTY_FIELDS);
   const [contactKind, setContactKind] = useState<'whatsapp' | 'wechat' | 'email' | 'class'>('class');
   const [contactValue, setContactValue] = useState('');
   const [worlds, setWorlds] = useState<{ id: string; original: Translatable | null; name: string; lang?: Language; category: CategoryId; visible: boolean }[]>([]);
@@ -191,9 +179,8 @@ export default function ProfilePage() {
     return () => clearTimeout(id);
   }, [pendingSave, ui]);
 
-  const fields = drafts[lang] ?? EMPTY_FIELDS;
   const setField = (key: keyof TransFields, value: string) =>
-    setDrafts((d) => ({ ...d, [lang]: { ...(d[lang] ?? EMPTY_FIELDS), [key]: value } }));
+    setFields((f) => ({ ...f, [key]: value }));
 
   useEffect(() => {
     if (!profile) return;
@@ -227,8 +214,8 @@ export default function ProfilePage() {
       setContactKind(profile.contact_kind);
       setContactValue(profile.contact_value);
       const seeded = fieldsFor(profile, lang);
-      setDrafts({ [lang]: seeded });
-      setSeeds({ [lang]: seeded });
+      setFields(seeded);
+      setInitial(seeded);
       // Read-only rows: they display with the usual cross-language fallback
       // and keep `original` to hand straight back on save.
       setWorlds(profile.hidden_worlds.map((hw) => ({
@@ -249,19 +236,14 @@ export default function ProfilePage() {
       return;
     }
 
-    // Otherwise the member is mid-edit, or only the language changed. Seed a
-    // draft for a language visited for the first time, relabel the read-only
-    // rows, and leave every pending edit — in this language and the other —
-    // exactly where it is.
-    if (!drafts[lang]) {
-      const seeded = fieldsFor(profile, lang);
-      setDrafts((d) => ({ ...d, [lang]: seeded }));
-      setSeeds((sd) => ({ ...sd, [lang]: seeded }));
-    }
+    // Otherwise the member is mid-edit, or only the language changed. The
+    // text boxes hold one version and are left strictly alone — switching
+    // language must never reach into something half-typed. Only the read-only
+    // rows relabel, and only for a legacy value that really does carry two.
     setWorlds((prev) => prev.map((w) => (w.original ? { ...w, name: t(w.original, lang) } : w)));
     setAskTopics((prev) => prev.map(relabel));
     setWantTopics((prev) => prev.map(relabel));
-  }, [profile, lang, hydratedAt, pendingSave, refreshing, drafts]);
+  }, [profile, lang, hydratedAt, pendingSave, refreshing]);
 
   const addWorld = () => {
     if (!newWorldName.trim()) return;
@@ -286,15 +268,19 @@ export default function ProfilePage() {
     setSaving(true);
     setError('');
 
+    /* Untouched stays untouched — see `initial`. */
+    const written = (key: keyof TransFields, stored: Translatable): Translatable =>
+      fields[key] === initial[key] ? (stored ?? {}) : oneValue(stored, lang, fields[key]);
+
     const payload = {
       p_full_name: name,
       p_native_name: nativeName || null,
       p_class_name: className,
       p_initials: initialsOf(name),
-      p_headline: mergeDrafts(profile.headline as Translatable, drafts, seeds, 'headline'),
-      p_role: mergeDrafts(profile.role as Translatable, drafts, seeds, 'role'),
-      p_intro: mergeDrafts(profile.intro as Translatable, drafts, seeds, 'intro'),
-      p_professional: mergeDrafts(profile.professional as Translatable, drafts, seeds, 'professional'),
+      p_headline: written('headline', profile.headline as Translatable),
+      p_role: written('role', profile.role as Translatable),
+      p_intro: written('intro', profile.intro as Translatable),
+      p_professional: written('professional', profile.professional as Translatable),
       p_contact_kind: contactKind,
       /* "Find me in class" means there is no handle to hand out, so the stored
          one is cleared rather than merely hidden. The form stops showing the
@@ -431,18 +417,6 @@ export default function ProfilePage() {
         </div>
       </Panel>
 
-      {/* The single most confusing thing about this screen, said out loud. The
-          language toggle in the bar decides which translation the text fields
-          write to — not merely which language the labels are in. */}
-      <Panel pad={11} tone="gold" innerRule={false}>
-        <Bi en={`Editing in ${lang === 'zh' ? '中文' : 'English'}`} zh={lang === 'zh' ? '编辑中文版' : '编辑英文版'} color="var(--color-navy-900)" />
-        <p style={{ margin: '6px 0 0', fontSize: 'var(--text-small)', color: 'var(--color-ink-2)', lineHeight: 1.55 }}>
-          {lang === 'zh'
-            ? '切换顶部的 EN / 中 可以编辑另一种语言的版本。两种语言会一起保存。'
-            : 'Switch EN / 中 in the bar above to write the other language. Both are saved together.'}
-        </p>
-      </Panel>
-
       {/* identity */}
       <section>
         <SectionHeader icon="nav-journal" cn="身份" className="mb-3">{ui('profile.identity')}</SectionHeader>
@@ -459,10 +433,10 @@ export default function ProfilePage() {
             </select>
           </Field>
           <Field label={ui('profile.headline')} cn="一句话">
-            <input className="rof-input" type="text" value={fields.headline} onChange={(e) => setField('headline', e.target.value)} placeholder={otherLang(profile.headline, lang)} />
+            <input className="rof-input" type="text" value={fields.headline} onChange={(e) => setField('headline', e.target.value)} />
           </Field>
           <Field label={ui('profile.role')} cn="角色">
-            <input className="rof-input" type="text" value={fields.role} onChange={(e) => setField('role', e.target.value)} placeholder={otherLang(profile.role, lang)} />
+            <input className="rof-input" type="text" value={fields.role} onChange={(e) => setField('role', e.target.value)} />
           </Field>
         </div>
       </section>
@@ -472,10 +446,10 @@ export default function ProfilePage() {
         <SectionHeader icon="idea" cn="介绍" className="mb-3">{ui('profile.introduction')}</SectionHeader>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
           <Field label={ui('profile.personal_intro')} cn="个人介绍">
-            <textarea className="rof-input" rows={3} value={fields.intro} onChange={(e) => setField('intro', e.target.value)} placeholder={otherLang(profile.intro, lang)} />
+            <textarea className="rof-input" rows={3} value={fields.intro} onChange={(e) => setField('intro', e.target.value)} />
           </Field>
           <Field label={ui('profile.professional')} cn="职业背景">
-            <textarea className="rof-input" rows={2} value={fields.professional} onChange={(e) => setField('professional', e.target.value)} placeholder={otherLang(profile.professional, lang)} />
+            <textarea className="rof-input" rows={2} value={fields.professional} onChange={(e) => setField('professional', e.target.value)} />
           </Field>
         </div>
       </section>
