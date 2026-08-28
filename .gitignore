@@ -41,3 +41,8 @@ next-env.d.ts
 
 # Generated from the live schema by `npm run gen:types` — checked in on purpose,
 # so a schema change shows up as a diff in review.
+
+# Local Supabase CLI state, created by `npx supabase start`. .temp holds
+# start-secrets/.../docker.env, which is the local stack's keys.
+/supabase/.temp/
+/supabase/.branches/

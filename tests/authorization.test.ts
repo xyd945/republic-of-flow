@@ -8,9 +8,11 @@
  *
  *   npm run test:authz
  *
- * It runs against the real project, because that is the only place the policies
+ * It runs against a real Postgres, because that is the only place the policies
  * and grants actually exist; a mocked client would test nothing. It creates
- * throwaway members and rows, probes as them, and deletes everything afterwards.
+ * throwaway members and rows, probes as them, and deletes everything afterwards
+ * — which is why it refuses to run anywhere but a local database. Start one
+ * with `npx supabase start` and point .env.development.local at it.
  *
  * TWO RULES THIS FILE HOLDS ITSELF TO, both learned the hard way:
  *
@@ -32,13 +34,16 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SECRET = process.env.SUPABASE_SECRET_KEY!;
-const PUB = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+import { loadLocalSupabaseEnv } from '../scripts/local-env.ts';
 
-if (!URL_ || !SECRET || !PUB) {
-  throw new Error('Missing Supabase env. Run via `npm run test:authz`, which loads .env.local.');
-}
+/* This suite creates auth users and deletes them again, so it runs against a
+   local database or not at all. It used to be run with
+   `--env-file=.env.local`, which is the hosted project — the suite was
+   creating and deleting real accounts alongside real members. */
+const env = loadLocalSupabaseEnv();
+const URL_ = env.url;
+const SECRET = env.secretKey;
+const PUB = env.publishableKey;
 
 const ADMIN = { apikey: SECRET, Authorization: `Bearer ${SECRET}`, 'Content-Type': 'application/json' };
 const ANON = { apikey: PUB, 'Content-Type': 'application/json' };
