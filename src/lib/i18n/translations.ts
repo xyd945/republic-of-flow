@@ -58,8 +58,8 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   },
   'auth.republic_desc': { en: 'A republic without borders', zh: '一个没有疆域的共和国' },
   'auth.members_desc': {
-    en: 'The Republic has 116 members across two classes. Enter the email your invitation was sent to.',
-    zh: '共和国目前有两届共 116 位成员。请输入收到邀请的邮箱。',
+    en: 'A private directory for the cohort. Enter the email your invitation was sent to.',
+    zh: '这是同学之间的私密名录。请输入收到邀请的邮箱。',
   },
   'auth.valid_email': { en: 'Enter a valid email address.', zh: '请输入有效邮箱。' },
   'auth.code_expires': { en: 'It expires in 10 minutes.', zh: '10 分钟内有效。' },
@@ -83,6 +83,8 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'people.title': { en: 'People', zh: '成员' },
   'people.search': { en: 'Search people, interests, skills...', zh: '搜索成员、兴趣、技能…' },
   'people.all': { en: 'All', zh: '全部' },
+  /* Classes 20-25 share one tab; see lib/classes.ts. */
+  'people.alumni': { en: 'Alumni', zh: '校友' },
   'people.count': { en: 'people', zh: '位成员' },
   'people.none': { en: 'No people found', zh: '没有找到成员' },
   'people.adjust': { en: 'Try adjusting your filters', zh: '试试调整筛选条件' },

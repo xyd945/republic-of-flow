@@ -39,6 +39,43 @@ and never add it as a build variable.
 npm run dev
 ```
 
+### Running against a local database
+
+`.env.local` points at the hosted project, so `npm run dev` talks to whatever
+is configured there — which for this repo has been production. Testing anything
+that writes needs a database of your own:
+
+```bash
+npx supabase start
+```
+
+That boots Postgres, Auth and PostgREST in Docker and applies every migration in
+`supabase/migrations` in order, so it doubles as a rehearsal for a migration
+before it is run for real. Put the printed URL and keys in
+`.env.development.local`, which `next dev` reads *ahead of* `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<PUBLISHABLE_KEY from supabase start>
+SUPABASE_SECRET_KEY=<SECRET_KEY from supabase start>
+```
+
+Sign-in codes are not emailed anywhere — they land in the local mailbox at
+<http://127.0.0.1:55324>. `supabase/templates/magic_link.html` is what puts the
+six digits in that message; without it the stock template sends a link, and the
+login screen has nowhere to get a code from.
+
+The ports in `supabase/config.toml` are shifted a thousand off the defaults
+because the usual `5432x` block collides with any other local Supabase project
+on the same machine. `npx supabase stop --no-backup` throws the database away.
+
+Every command that writes — the demo seeder and the authorization suite — reads
+**only** `.env.development.local`, and only if its URL is `localhost`,
+`127.0.0.1` or `::1`. There is no fall back to `.env.local` and no way to
+override it: those tools are local-only, full stop. Without that, following the
+paragraph above and then running one of them would have created and deleted
+rows in the hosted project, alongside real members.
+
 ### Database
 
 Run `supabase/migrations/00001_foundation.sql` in the Supabase SQL editor. It
@@ -58,7 +95,22 @@ npx tsx scripts/seed-demo.ts --clean  # remove them again
 ```
 
 Each demo member is a real auth user (`profiles.user_id` is `NOT NULL`), so
-removal goes through `auth.users` and cascades.
+removal goes through `auth.users` and cascades. Both forms need a local
+database — see above — and the seeder additionally refuses a database that
+already holds profiles, so it cannot bury a real cohort under thirteen
+invented ones.
+
+### Authorization tests
+
+```bash
+npm run test:authz
+```
+
+Sixty-one probes, each one a hole that was once genuinely open and was closed
+by a migration. It runs against a real Postgres because policies and grants
+exist nowhere else, and it creates and deletes accounts to do so — hence local
+only. The three suites that need no database at all (`test:settling`,
+`test:initials`, and `verify-assets`) run anywhere.
 
 ## Curators
 
