@@ -87,7 +87,7 @@ export interface ProfilesRow {
   is_active: boolean;
   is_featured: boolean;
   is_curator: boolean;
-  founder_no: number;
+  founder_no: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -106,6 +106,7 @@ export type RpcName =
   | 'accept_interest'
   | 'add_notification'
   | 'auth_profile_id'
+  | 'claim_membership'
   | 'curator_suggest'
   | 'curator_update_member'
   | 'decline_interest'
