@@ -7,21 +7,16 @@
  * Every demo member is a real auth user (profiles.user_id is NOT NULL), so
  * removal goes through auth.users and cascades to profiles.
  */
-import { readFileSync } from 'node:fs';
 import { SEED_PROFILES, SEED_LISTINGS, SEED_INTERESTS, SEED_MATCHES } from '../src/lib/seed';
+import { loadLocalSupabaseEnv } from './local-env.ts';
 
-const env = Object.fromEntries(
-  readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
-    .split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    })
-);
+// This creates auth users and profiles, so it runs against a local database
+// or not at all. It used to read .env.local, which is the production project.
+const env = loadLocalSupabaseEnv();
+console.log(`seeding ${new URL(env.url).host}`);
 
-const URL_ = env.NEXT_PUBLIC_SUPABASE_URL;
-const KEY = env.SUPABASE_SECRET_KEY;
+const URL_ = env.url;
+const KEY = env.secretKey;
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' };
 
 const DEMO_DOMAIN = 'republic-demo.invalid';
@@ -60,17 +55,16 @@ async function seed() {
     await clean();
   }
 
-  /* Refuse to plant thirteen invented classmates in a directory that has real
-     ones. .env.local points at whatever project is configured, and for this
-     repo that has historically been the production one. The fixed founder
-     numbers below would collide with theirs too, but the people are the real
-     reason: seeding is for a throwaway project only. */
+  /* Belt and braces on top of the loopback check above: a local database can
+     still be somebody's working copy with real data restored into it. Thirteen
+     invented classmates in a directory that has real ones is the thing worth
+     preventing; the fixed founder numbers colliding is only the symptom. */
   const real: { full_name: string }[] = await api('/rest/v1/profiles?select=full_name&limit=5');
   if (real.length) {
     throw new Error(
       `refusing to seed: this project already holds ${real.length}+ profile(s) `
       + `(${real.map((r) => r.full_name).join(', ')}). `
-      + `Point .env.local at a throwaway Supabase project first.`
+      + `Point .env.development.local at an empty one first.`
     );
   }
 
