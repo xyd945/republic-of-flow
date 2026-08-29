@@ -259,7 +259,21 @@ img.pixel {
 }
 
 @media (max-width: 470px) {
-  .rof-frame { padding: 0; }
+  .rof-frame {
+    padding: 0;
+    /* dvh here too, and this one line is the whole fix. vh is the viewport
+       with the browser toolbar COLLAPSED; dvh is the viewport as it stands.
+       A frame left at 100vh is therefore taller than the 100dvh screen
+       inside it by exactly the height of that toolbar — and those spare
+       pixels are a real, scrollable document. Scrolling up moved the frame,
+       tab bar and all, and it STAYED there, because a scroll position is
+       not a rubber band.
+
+       Nothing is pinned or frozen to achieve that: with the extra height
+       gone there is simply nowhere to scroll up TO, so pulling down to
+       refresh and the bounce at the edges both still work. */
+    min-height: 100dvh;
+  }
   .rof-phone { width: 100vw; border: none; padding: 0; box-shadow: none; }
   /* dvh, not vh: mobile Safari counts its collapsing toolbars in vh, which
      would hide the tab bar behind the browser chrome on first paint. */
