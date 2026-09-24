@@ -168,7 +168,13 @@ export function useListings() {
       if (viewerProfileId && i.profile_id === viewerProfileId) mine.set(i.listing_id, i.status);
     }
 
-    return ((listings.data ?? []) as ListingRow[]).map((l) => ({
+    return ((listings.data ?? []) as ListingRow[])
+      // Withdrawn is gone. RLS still returns it to its owner and to curators,
+      // so without this it would linger on the owner's own Market tabs and on
+      // the Curator Desk — the market, the home screen and the desk all read
+      // listings through here, so this is the one place it has to happen.
+      .filter((l) => l.status !== 'cancelled')
+      .map((l) => ({
       ...l,
       creator: byId.get(l.creator_profile_id),
       interests: byListing.get(l.id) ?? [],

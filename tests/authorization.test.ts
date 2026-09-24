@@ -491,6 +491,104 @@ describe('listings and matches (00006)', () => {
   });
 });
 
+describe('withdrawing and editing a listing (00013)', () => {
+  // Fresh listings, so nothing here leans on the state the block above left.
+  const status = async (id: string) =>
+    (await one<{ status: string }>(`market_listings?select=status&id=eq.${id}`)).status;
+  const title = async (id: string) =>
+    (await one<{ title: Record<string, string> }>(`market_listings?select=title&id=eq.${id}`)).title;
+
+  it('a NON-OWNER cannot withdraw a real open listing', async () => {
+    const theirs = await makeListing(bob.id, 'ZZZ authz withdraw-victim');
+    const r = await rpc(alice.headers, 'withdraw_listing', { p_listing_id: theirs });
+    assert.equal(r.status, 403, `a stranger withdrew a listing: ${r.status} ${r.body}`);
+    assert.equal(await status(theirs), 'open');
+  });
+
+  it('a NON-OWNER cannot edit a real open listing', async () => {
+    const theirs = await makeListing(bob.id, 'ZZZ authz edit-victim');
+    const r = await rpc(alice.headers, 'edit_listing', {
+      p_listing_id: theirs, p_title: { en: 'hijacked' }, p_description: { en: '' },
+    });
+    assert.equal(r.status, 403, `a stranger edited a listing: ${r.status} ${r.body}`);
+    assert.deepEqual(await title(theirs), { en: 'ZZZ authz edit-victim' });
+  });
+
+  it('anonymous cannot call either', async () => {
+    const theirs = await makeListing(bob.id, 'ZZZ authz anon');
+    const w = await rpc(ANON, 'withdraw_listing', { p_listing_id: theirs });
+    const e = await rpc(ANON, 'edit_listing', { p_listing_id: theirs, p_title: { en: 'x' }, p_description: {} });
+    assert.ok(w.status >= 400 && e.status >= 400, `anon reached them: ${w.status} / ${e.status}`);
+    assert.equal(await status(theirs), 'open');
+    assert.deepEqual(await title(theirs), { en: 'ZZZ authz anon' });
+  });
+
+  it('the OWNER can edit — and the old language does not linger beside the new one', async () => {
+    const mine = await makeListing(alice.id, 'ZZZ authz typo');
+    const r = await rpc(alice.headers, 'edit_listing', {
+      p_listing_id: mine, p_title: { zh: '改正后的标题' }, p_description: { zh: '说明' },
+    });
+    assert.ok(r.status < 300, `the owner could not edit: ${r.status} ${r.body}`);
+    // Replaced whole: a merge would leave {en: typo, zh: fix}, two versions
+    // that disagree, and English readers would still see the typo.
+    assert.deepEqual(await title(mine), { zh: '改正后的标题' });
+  });
+
+  it('edit refuses an empty title, on a real owned listing', async () => {
+    const mine = await makeListing(alice.id, 'ZZZ authz keep-title');
+    const r = await rpc(alice.headers, 'edit_listing', {
+      p_listing_id: mine, p_title: { en: '   ' }, p_description: {},
+    });
+    assert.equal(r.status, 400, `an empty title was accepted: ${r.status} ${r.body}`);
+    assert.deepEqual(await title(mine), { en: 'ZZZ authz keep-title' });
+  });
+
+  it('the OWNER can withdraw, and then nobody can raise a hand on it', async () => {
+    const mine = await makeListing(alice.id, 'ZZZ authz withdrawn');
+    const r = await rpc(alice.headers, 'withdraw_listing', { p_listing_id: mine });
+    assert.ok(r.status < 300, `the owner could not withdraw: ${r.status} ${r.body}`);
+    assert.equal(await status(mine), 'cancelled');
+
+    const raised = await rpc(bob.headers, 'raise_interest', { p_listing_id: mine, p_message: null });
+    assert.equal(raised.status, 400, `a hand was raised on a withdrawn listing: ${raised.status} ${raised.body}`);
+    assert.equal((await read(`market_interests?select=id&listing_id=eq.${mine}`)).length, 0);
+
+    // and it cannot be edited or withdrawn again
+    const again = await rpc(alice.headers, 'edit_listing', {
+      p_listing_id: mine, p_title: { en: 'revived?' }, p_description: {},
+    });
+    assert.equal(again.status, 400, `a withdrawn listing was edited: ${again.status} ${again.body}`);
+  });
+
+  it('the OWNER cannot withdraw or edit a MATCHED listing, on a real live match', async () => {
+    const mine = await makeListing(bob.id, 'ZZZ authz matched-then-withdraw');
+    const raised = await rpc(alice.headers, 'raise_interest', { p_listing_id: mine, p_message: null });
+    assert.ok(raised.status < 300, `fixture: raise_interest failed ${raised.status} ${raised.body}`);
+    const interest = (await one<{ id: string }>(`market_interests?select=id&listing_id=eq.${mine}`)).id;
+    const accepted = await rpc(bob.headers, 'accept_interest', { p_interest_id: interest });
+    assert.ok(accepted.status < 300, `fixture: accept_interest failed ${accepted.status} ${accepted.body}`);
+    assert.equal(await status(mine), 'matched');
+
+    const w = await rpc(bob.headers, 'withdraw_listing', { p_listing_id: mine });
+    assert.equal(w.status, 400, `a matched listing was withdrawn: ${w.status} ${w.body}`);
+    const e = await rpc(bob.headers, 'edit_listing', {
+      p_listing_id: mine, p_title: { en: 'changed after agreeing' }, p_description: {},
+    });
+    assert.equal(e.status, 400, `a matched listing was edited: ${e.status} ${e.body}`);
+    assert.equal(await status(mine), 'matched');
+    assert.deepEqual(await title(mine), { en: 'ZZZ authz matched-then-withdraw' });
+  });
+
+  it('a withdrawn listing is invisible to everyone but its owner', async () => {
+    const mine = await makeListing(alice.id, 'ZZZ authz invisible');
+    await rpc(alice.headers, 'withdraw_listing', { p_listing_id: mine });
+    assert.equal((await read(`market_listings?select=id&id=eq.${mine}`, bob.headers)).length, 0,
+      'another member can still see a withdrawn listing');
+    assert.equal((await read(`market_listings?select=id&id=eq.${mine}`, alice.headers)).length, 1,
+      'the owner lost sight of their own row');
+  });
+});
+
 describe('notifications are private correspondence (00008)', () => {
   let bobNotification: string;
   let bobNotificationKind: string;
