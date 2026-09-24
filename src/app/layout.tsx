@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 /**
- * The bitmap faces are loaded with a plain <link>, not next/font.
+ * The faces are loaded with a plain <link>, not next/font.
  *
  * Two reasons, both learned here. next/font emits its own `--font-*` CSS
  * variables and would overwrite the type tokens in globals.css — that is
@@ -12,14 +12,12 @@ import './globals.css';
  * mid-stylesheet and fails to parse, while an import before it is fragile to
  * reorder later. A link in the head is immune to both.
  *
- * PIXEL RULE: these faces are only ever rendered at 8/10/12/16/24/32px.
- * A fractional size puts the glyph off the pixel grid and it turns to mush.
+ * Latin only. Chinese comes from the device's own face (see --font-cjk), so
+ * there is no multi-megabyte CJK download.
  */
 const FONT_HREF =
-  'https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700' +
-  '&family=Pixelify+Sans:wght@400;500;600;700' +
-  '&family=DotGothic16' +
-  '&family=Press+Start+2P' +
+  'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700' +
+  '&family=Inter:wght@400;500;600;700' +
   '&display=swap';
 
 export const metadata: Metadata = {

@@ -11,8 +11,7 @@
      · hard 2px borders, never hairlines
      · offset shadows with ZERO blur
      · stepped motion, never eased
-     · bitmap faces rendered ONLY at 8/10/12/16/24/32px — a fractional size
-       lands the glyph off the pixel grid and it turns to mush
+     · the FRAME is pixel, the type is not: readable faces set inside it
      · every sprite gets image-rendering: pixelated
 
    Replaces the parchment/serif system this app shipped with.
@@ -68,11 +67,20 @@
   --color-cat-money: #C9A66B;
   --color-cat-art: #9C3B2E;
 
-  /* ---- Type ---- */
-  --font-display: 'Silkscreen', 'Press Start 2P', monospace;
-  --font-body: 'Pixelify Sans', 'Silkscreen', monospace;
-  --font-cjk: 'DotGothic16', 'Pixelify Sans', sans-serif;
-  --font-hero: 'Press Start 2P', 'Silkscreen', monospace;
+  /* ---- Type ----
+     Issue #45: the bitmap faces (Silkscreen, Pixelify Sans, DotGothic16) were
+     hard to read, so the TYPE is ordinary and only the frame is pixel.
+     Chakra Petch keeps the display face squared and HUD-like, so headings
+     still sit naturally inside hard borders and stepped shadows; Inter does
+     the reading. Chinese uses the device's own face — PingFang on an iPhone —
+     which ships with the phone and covers every character, where DotGothic16
+     is a Japanese pixel font missing much of simplified Chinese. Every stack
+     ends in the CJK faces, so a Chinese name inside an English heading lands
+     in a real Chinese font rather than whatever the browser reaches for. */
+  --font-display: 'Chakra Petch', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+  --font-body: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', system-ui, sans-serif;
+  --font-cjk: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+  --font-hero: 'Chakra Petch', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
 
   /* Integer sizes only. Named to match the design's scale. */
   --text-hero: 40px;
@@ -83,8 +91,7 @@
   --text-small: 12px;
   /* The source style guide's sizes (24/16/12/10/8) were drawn for a 1440px
      desktop mock and are unreadable on a phone. The scale is stepped up ~40%
-     for the mobile-first product; ratios and hierarchy are unchanged. Whole
-     pixels only — a bitmap face scaled fractionally turns to mush. */
+     for the mobile-first product; ratios and hierarchy are unchanged. */
   --text-micro: 10px;
 
   --tracking-display: 0.04em;
@@ -151,10 +158,10 @@
   --color-cat-money: #C9A66B;
   --color-cat-art: #9C3B2E;
 
-  --font-display: 'Silkscreen', 'Press Start 2P', monospace;
-  --font-body: 'Pixelify Sans', 'Silkscreen', monospace;
-  --font-cjk: 'DotGothic16', 'Pixelify Sans', sans-serif;
-  --font-hero: 'Press Start 2P', 'Silkscreen', monospace;
+  --font-display: 'Chakra Petch', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+  --font-body: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', system-ui, sans-serif;
+  --font-cjk: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+  --font-hero: 'Chakra Petch', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
 
   --text-hero: 40px;
   --text-h1: 28px;
@@ -164,8 +171,7 @@
   --text-small: 12px;
   /* The source style guide's sizes (24/16/12/10/8) were drawn for a 1440px
      desktop mock and are unreadable on a phone. The scale is stepped up ~40%
-     for the mobile-first product; ratios and hierarchy are unchanged. Whole
-     pixels only — a bitmap face scaled fractionally turns to mush. */
+     for the mobile-first product; ratios and hierarchy are unchanged. */
   --text-micro: 10px;
 
   --tracking-display: 0.04em;
@@ -196,9 +202,11 @@ body {
   font-family: var(--font-body);
   font-size: var(--text-body);
   line-height: 1.6;
-  /* Pixel art must not be smoothed anywhere. */
-  -webkit-font-smoothing: none;
-  font-smooth: never;
+  /* Smoothed, now that the faces are vector. Turning it off suited bitmap
+     fonts and makes an outline font ragged on a Mac or an iPhone. This is
+     text only — sprites stay crisp through image-rendering: pixelated. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
@@ -294,7 +302,7 @@ img.pixel {
   line-height: 1;
 }
 
-/* 中文 never takes the display face — bitmap caps have no CJK coverage. */
+/* 中文 never takes the display treatment — caps and tracking are for Latin. */
 .rof-cjk {
   font-family: var(--font-cjk);
   letter-spacing: 0;
