@@ -770,7 +770,12 @@ export default function MarketPage() {
           onClose={() => setShowPublish(false)} onDone={() => {}} />
       )}
       {editing && (
-        <PublishModal viewerProfileId={viewerProfileId} lang={lang} editing={editing}
+        /* Keyed by the listing, so a new target is a new form. Sheet does not
+           trap focus, so with A's form open the keyboard can still reach B's
+           Edit button behind it; without the key React kept this instance,
+           its title and description stayed A's while editing.id became B's,
+           and saving wrote A's text over B. */
+        <PublishModal key={editing.id} viewerProfileId={viewerProfileId} lang={lang} editing={editing}
           onClose={() => setEditing(null)} onDone={() => {}} />
       )}
       {confirmWithdraw && (
