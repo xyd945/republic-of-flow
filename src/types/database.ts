@@ -111,10 +111,12 @@ export type RpcName =
   | 'curator_update_member'
   | 'decline_interest'
   | 'dismatch'
+  | 'edit_listing'
   | 'is_curator'
   | 'mark_match_met'
   | 'mark_notifications_read'
   | 'notification_payload'
   | 'raise_interest'
   | 'rls_auto_enable'
-  | 'save_profile';
+  | 'save_profile'
+  | 'withdraw_listing';

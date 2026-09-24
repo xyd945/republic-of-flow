@@ -156,6 +156,13 @@ export default function AdminPage() {
    * closed match on a listing that never reopened. Curator-only is enforced
    * inside the function.
    */
+  /**
+   * One call — the dismatch() function closes the match, reopens the listing
+   * and returns the accepted request to pending inside a single transaction.
+   * Previously these were three sequential writes and two of the three errors
+   * were discarded, so a failure could leave a closed match on a listing that
+   * never reopened. Curator-only is enforced inside the function.
+   */
   const dismatch = async (match: MatchWithParties) => {
     setBusyKey(`${match.id}:dismatch`);
     try {

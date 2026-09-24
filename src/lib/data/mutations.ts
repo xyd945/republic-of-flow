@@ -55,6 +55,22 @@ export const useRaiseInterest = () =>
     [keys.interests, keys.listings, keys.notifications]
   );
 
+/**
+ * A member takes back their own listing. Sets it to 'cancelled' rather than
+ * deleting it — every function that acts on a listing already refuses one that
+ * is not open, so nobody can raise a hand on it, accept on it, or be suggested
+ * for it afterwards. Owner-only and open-only, checked inside the function.
+ */
+export const useWithdrawListing = () =>
+  useRpc<{ p_listing_id: string }>('withdraw_listing', [keys.listings]);
+
+/** Correct the title or description of your own open listing. */
+export const useEditListing = () =>
+  useRpc<{ p_listing_id: string; p_title: Translatable; p_description: Translatable }>(
+    'edit_listing',
+    [keys.listings]
+  );
+
 /** Accept: moves the interest, closes the listing, creates the match. */
 export const useAcceptInterest = () =>
   useRpc<{ p_interest_id: string }>(
