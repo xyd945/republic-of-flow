@@ -45,8 +45,8 @@ function usePick() {
 /**
  * The bilingual caps label — the single most-used mark in the system.
  *
- * English takes the bitmap display face; 中文 follows in the CJK face, because
- * Silkscreen has no CJK coverage at all and would fall back mid-sentence.
+ * English takes the display face; 中文 follows in the CJK face, without the
+ * caps and tracking, which are a Latin treatment.
  * The pairing is always rendered, in both languages, by design: the Republic's
  * voice is bilingual rather than translated.
  */
@@ -426,8 +426,7 @@ export function EmptyState({
  * 16px are about 33px wide — so every 28, 30 and 34px avatar in the app spilled
  * its letters through its own frame. Seven of them.
  *
- * Whole pixels only, and each step leaves room for two characters plus the
- * border: a bitmap face at a fractional size is mush.
+ * Each step leaves room for two characters plus the border.
  */
 function initialsSize(box: number): number {
   if (box >= 64) return 24;

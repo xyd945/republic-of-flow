@@ -164,8 +164,7 @@ export default function LoginPage() {
 
                 <label style={{ display: 'block' }}>
                   <div style={{ marginBottom: 6 }}><Bi en={ui('auth.verification_code')} zh="验证码" color="var(--color-gold)" /></div>
-                  {/* A fixed 16px, not a scaled one: the display face is a
-                      bitmap and any fractional size puts it off the pixel grid. */}
+                  {/* A fixed 16px, large enough to check a code at a glance. */}
                   <input
                     className="rof-input"
                     type="text"
