@@ -123,6 +123,16 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'market.interested': { en: 'I’m interested', zh: '我有兴趣' },
   'market.interest_sent': { en: 'Interest sent', zh: '已表达兴趣' },
   'market.your_listing': { en: 'Your listing', zh: '你发布的' },
+  // Issue #46: correcting or taking back your own listing, while it is open.
+  'market.edit': { en: 'Edit', zh: '修改' },
+  'market.withdraw': { en: 'Withdraw', zh: '撤回' },
+  'market.edit_listing': { en: 'Edit listing', zh: '修改条目' },
+  'market.save': { en: 'Save changes', zh: '保存修改' },
+  'market.confirm_withdraw': { en: 'Withdraw this listing?', zh: '撤回这条信息？' },
+  'market.withdraw_explain': {
+    en: 'It disappears from the market for everyone, and nobody can raise a hand on it any more. This cannot be undone — if you change your mind, post it again.',
+    zh: '它会从市场上对所有人消失，之后也不会再有人能对它表达兴趣。撤回后无法恢复——如果改变主意，可以重新发布。',
+  },
   'market.interested_count': { en: 'interested', zh: '人感兴趣' },
   'market.offer_one': { en: 'Offer', zh: '提供' },
   'market.mine': { en: 'Mine', zh: '我的' },

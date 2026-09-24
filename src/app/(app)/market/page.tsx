@@ -4,8 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useI18n } from '@/lib/i18n/context';
 import { useListings, useMatches } from '@/lib/data/views';
 import {
-  useAcceptInterest, useDeclineInterest, useMarkMatchMet,
-  usePublishListing, useRaiseInterest,
+  useAcceptInterest, useDeclineInterest, useEditListing, useMarkMatchMet,
+  usePublishListing, useRaiseInterest, useWithdrawListing,
 } from '@/lib/data/mutations';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
@@ -13,6 +13,16 @@ import {
   Avatar, Bi, BiText, Button, Divider, EmptyState, ErrorNote, Panel, PixelSpinner, SectionHeader, Sheet, StatusChip,
 } from '@/components/pixel';
 import type { ListingWithCreator, ListingInterest, MatchWithParties, Language } from '@/types';
+
+/**
+ * PostgREST rejects with a plain object, never an Error, so
+ * `e instanceof Error ? e.message : String(e)` printed "[object Object]" — and
+ * the functions' own refusals ("only an open listing can be withdrawn") are
+ * the messages most worth reading.
+ */
+function errText(e: unknown): string {
+  return e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e);
+}
 
 /* ------------------------------------------------------------- segmented */
 
@@ -138,7 +148,7 @@ function SentRow({ listing }: { listing: ListingWithCreator }) {
 /* --------------------------------------------------------- listing card */
 
 function MarketCard({
-  listing, viewerProfileId, busyKey, onInterest, onAccept, onReject,
+  listing, viewerProfileId, busyKey, onInterest, onAccept, onReject, onEdit, onWithdraw,
 }: {
   listing: ListingWithCreator;
   viewerProfileId: string | null;
@@ -146,6 +156,8 @@ function MarketCard({
   onInterest: () => void;
   onAccept: (i: ListingInterest) => void;
   onReject: (i: ListingInterest) => void;
+  onEdit: () => void;
+  onWithdraw: () => void;
 }) {
   const { t, ui } = useI18n();
   const isMine = listing.creator_profile_id === viewerProfileId;
@@ -220,6 +232,17 @@ function MarketCard({
                 </div>
               )}
             </>
+          )}
+          {/* Open only. A matched listing has a counterpart who agreed to it
+              as written; undoing that is the curator's dismatch. */}
+          {listing.status === 'open' && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+              <Button tone="secondary" size="sm" onClick={onEdit}
+                disabled={busyKey !== null}>{ui('market.edit')}</Button>
+              <Button tone="secondary" size="sm" onClick={onWithdraw}
+                loading={busyKey === `${listing.id}:withdraw`}
+                disabled={busyKey !== null}>{ui('market.withdraw')}</Button>
+            </div>
           )}
         </div>
       ) : (
@@ -396,21 +419,30 @@ function InterestModal({
 }
 
 function PublishModal({
-  viewerProfileId, lang, onClose, onDone,
+  viewerProfileId, lang, editing, onClose, onDone,
 }: {
   viewerProfileId: string | null;
   lang: Language;
+  /** Set to correct an existing listing instead of posting a new one. */
+  editing?: ListingWithCreator;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const { ui } = useI18n();
+  const { t, ui } = useI18n();
   const [type, setType] = useState<'wanted' | 'offer'>('wanted');
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
+  // t() falls back across languages, so the box shows exactly what the card
+  // shows — never an empty field over text that is already there.
+  const [title, setTitle] = useState(editing ? t(editing.title) : '');
+  const [desc, setDesc] = useState(editing ? t(editing.description) : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const publish_ = usePublishListing();
+  const edit_ = useEditListing();
+
+  // Same guard as InterestModal, set true on setup for Strict Mode's sake.
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const publish = async () => {
     if (!title.trim()) { setError(ui('market.need_title')); return; }
@@ -418,39 +450,58 @@ function PublishModal({
     setBusy(true);
     setError('');
     try {
-      await publish_.mutateAsync({
-        creator_profile_id: viewerProfileId,
-        type,
-        title: { [lang]: title.trim() },
-        description: { [lang]: desc.trim() },
-        status: 'open',
-      });
+      if (editing) {
+        // One text, replaced whole — see edit_listing() in 00013.
+        await edit_.mutateAsync({
+          p_listing_id: editing.id,
+          p_title: { [lang]: title.trim() },
+          p_description: { [lang]: desc.trim() },
+        });
+      } else {
+        await publish_.mutateAsync({
+          creator_profile_id: viewerProfileId,
+          type,
+          title: { [lang]: title.trim() },
+          description: { [lang]: desc.trim() },
+          status: 'open',
+        });
+      }
       onDone();
-      onClose();
+      // Only while this sheet is still the one on screen. Dismissed mid-save,
+      // it has closed itself already — and closing now would close whichever
+      // sheet the member opened since, throwing away what they had typed in it.
+      if (alive.current) onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (alive.current) setError(errText(e));
     } finally {
-      setBusy(false);
+      if (alive.current) setBusy(false);
     }
   };
 
   return (
     <Sheet
-      title={ui('market.new_listing')} cn="新条目" onClose={onClose}
+      title={editing ? ui('market.edit_listing') : ui('market.new_listing')}
+      cn={editing ? '修改条目' : '新条目'} onClose={onClose}
       footer={
         <Button tone="dark" size="lg" block onClick={publish} loading={busy}>
-          {busy ? ui('market.publishing') : ui('market.publish')}
+          {editing
+            ? (busy ? ui('market.saving') : ui('market.save'))
+            : (busy ? ui('market.publishing') : ui('market.publish'))}
         </Button>
       }
     >
-      <Tabs
-        items={[
-          { id: 'wanted', label: ui('market.wanted') },
-          { id: 'offer', label: ui('market.offers') },
-        ]}
-        value={type}
-        onChange={(id) => setType(id as 'wanted' | 'offer')}
-      />
+      {/* The type is fixed once posted: a Wanted that should have been an
+          Offer is a different listing, and people may have raised a hand. */}
+      {!editing && (
+        <Tabs
+          items={[
+            { id: 'wanted', label: ui('market.wanted') },
+            { id: 'offer', label: ui('market.offers') },
+          ]}
+          value={type}
+          onChange={(id) => setType(id as 'wanted' | 'offer')}
+        />
+      )}
 
       <label style={{ display: 'block' }}>
         <div style={{ marginBottom: 6 }}><Bi en={ui('market.listing_title')} zh="标题" color="var(--color-gold)" /></div>
@@ -472,7 +523,7 @@ function PublishModal({
 /* ------------------------------------------------------------------ page */
 
 export default function MarketPage() {
-  const { lang, ui } = useI18n();
+  const { t, lang, ui } = useI18n();
   const { listings, viewerProfileId, loading: listingsLoading, error: listingsError } = useListings();
   // Matches has its own loading and error. Ignoring them made a failed matches
   // query render the Matches tab as "no matches yet" — the exact outage-looks-
@@ -483,6 +534,9 @@ export default function MarketPage() {
   const [tab, setTab] = useState('wanted');
   const [interestFor, setInterestFor] = useState<ListingWithCreator | null>(null);
   const [showPublish, setShowPublish] = useState(false);
+  const [editing, setEditing] = useState<ListingWithCreator | null>(null);
+  // Withdrawing cannot be undone from the member's side, so it asks first.
+  const [confirmWithdraw, setConfirmWithdraw] = useState<ListingWithCreator | null>(null);
   // Which control is mid-write, e.g. `<interestId>:accept`. A plain boolean
   // would spin every button on the page at once.
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -566,6 +620,19 @@ export default function MarketPage() {
    */
   const accept = useAcceptInterest();
   const decline = useDeclineInterest();
+  const withdraw = useWithdrawListing();
+
+  const withdrawListing = async (listing: ListingWithCreator) => {
+    setBusyKey(`${listing.id}:withdraw`);
+    setError('');
+    try {
+      await withdraw.mutateAsync({ p_listing_id: listing.id });
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusyKey(null);
+    }
+  };
 
   const acceptInterest = async (interest: ListingInterest) => {
     setBusyKey(`${interest.id}:accept`);
@@ -573,7 +640,7 @@ export default function MarketPage() {
     try {
       await accept.mutateAsync({ p_interest_id: interest.id });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errText(e));
     } finally {
       setBusyKey(null);
     }
@@ -585,7 +652,7 @@ export default function MarketPage() {
     try {
       await decline.mutateAsync({ p_interest_id: interest.id });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errText(e));
     } finally {
       setBusyKey(null);
     }
@@ -611,7 +678,8 @@ export default function MarketPage() {
               : undefined}
           >
             <MarketCard listing={l} viewerProfileId={viewerProfileId} busyKey={busyKey}
-              onInterest={() => setInterestFor(l)} onAccept={acceptInterest} onReject={rejectInterest} />
+              onInterest={() => setInterestFor(l)} onAccept={acceptInterest} onReject={rejectInterest}
+              onEdit={() => setEditing(l)} onWithdraw={() => setConfirmWithdraw(l)} />
           </div>
         ))}
       </div>
@@ -700,6 +768,34 @@ export default function MarketPage() {
       {showPublish && (
         <PublishModal viewerProfileId={viewerProfileId} lang={lang}
           onClose={() => setShowPublish(false)} onDone={() => {}} />
+      )}
+      {editing && (
+        <PublishModal viewerProfileId={viewerProfileId} lang={lang} editing={editing}
+          onClose={() => setEditing(null)} onDone={() => {}} />
+      )}
+      {confirmWithdraw && (
+        <Sheet
+          title={ui('market.confirm_withdraw')} cn="撤回这条信息？"
+          onClose={() => setConfirmWithdraw(null)}
+          footer={
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button tone="red" size="lg" onClick={() => {
+                const target = confirmWithdraw;
+                setConfirmWithdraw(null);
+                withdrawListing(target);
+              }}>{ui('market.withdraw')}</Button>
+              <Button tone="secondary" size="lg" onClick={() => setConfirmWithdraw(null)}>{ui('profile.cancel')}</Button>
+            </div>
+          }
+        >
+          <div style={{
+            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+            letterSpacing: 'var(--tracking-display)', color: 'var(--color-ink)', lineHeight: 1.3,
+          }}>{t(confirmWithdraw.title)}</div>
+          <p style={{ margin: 0, fontSize: 'var(--text-body)', color: 'var(--color-muted)', lineHeight: 1.6 }}>
+            {ui('market.withdraw_explain')}
+          </p>
+        </Sheet>
       )}
     </Page>
   );
