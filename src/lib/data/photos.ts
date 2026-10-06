@@ -53,8 +53,8 @@ export async function removePhotos(paths: string[]): Promise<void> {
 
 /**
  * Uploads each photo and its thumbnail into the member's own folder and
- * returns the photo paths, in order. If any upload fails, whatever already
- * landed is removed again before the error is passed on.
+ * returns the photo paths, in order. If any upload fails, the error is
+ * passed on at once and whatever already landed is removed behind it.
  */
 export async function uploadPhotos(photos: PreparedPhoto[]): Promise<string[]> {
   if (!photos.length) return [];
@@ -77,7 +77,9 @@ export async function uploadPhotos(photos: PreparedPhoto[]): Promise<string[]> {
     }
     return done;
   } catch (e) {
-    await removePhotos(done).catch(() => {});
+    // Not awaited: on the connection that just timed out, the cleanup can
+    // stall too, and the form would then wait on it forever.
+    removePhotos(done).catch(() => {});
     throw e;
   }
 }

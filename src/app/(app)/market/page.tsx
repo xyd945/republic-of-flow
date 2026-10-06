@@ -219,7 +219,7 @@ type PhotoSlot = { key: string; path?: string; fresh?: PreparedPhoto };
 
 /** Up to three photos; the first is the cover, and any other can be made the cover. */
 function PhotoPicker({
-  slots, onChange, onError, preparing, setPreparing,
+  slots, onChange, onError, preparing, setPreparing, saving,
 }: {
   slots: PhotoSlot[];
   onChange: React.Dispatch<React.SetStateAction<PhotoSlot[]>>;
@@ -227,6 +227,8 @@ function PhotoPicker({
   /** Held by the form, so Save waits for photos that are still being shrunk. */
   preparing: boolean;
   setPreparing: (on: boolean) => void;
+  /** While the form is saving, the photos are fixed: the save already has its list. */
+  saving: boolean;
 }) {
   const { ui } = useI18n();
   const input = useRef<HTMLInputElement>(null);
@@ -284,12 +286,12 @@ function PhotoPicker({
                   background: 'var(--color-gold)', color: 'var(--color-navy-900)',
                 }}>{ui('market.cover')}</span>
               ) : (
-                <button type="button" className="rof-label" onClick={() => makeCover(i)} style={{
+                <button type="button" className="rof-label" onClick={() => makeCover(i)} disabled={saving} style={{
                   ...corner, left: 0, bottom: 0,
                   background: 'var(--color-navy-900)', color: 'var(--color-on-navy)',
                 }}>{ui('market.make_cover')}</button>
               )}
-              <button type="button" onClick={() => remove(i)} aria-label={ui('market.remove_photo')} style={{
+              <button type="button" onClick={() => remove(i)} disabled={saving} aria-label={ui('market.remove_photo')} style={{
                 ...corner, right: 0, top: 0, minWidth: 28, minHeight: 28, lineHeight: 1,
                 background: 'var(--color-navy-900)', color: 'var(--color-on-navy)', fontSize: 'var(--text-h3)',
               }}>×</button>
@@ -300,7 +302,7 @@ function PhotoPicker({
           <button
             type="button"
             onClick={() => input.current?.click()}
-            disabled={preparing}
+            disabled={preparing || saving}
             className="rof-label"
             style={{
               aspectRatio: '1 / 1', border: '2px dashed var(--color-line-soft)', borderRadius: 0,
@@ -725,7 +727,7 @@ function PublishModal({
       </label>
 
       <PhotoPicker slots={slots} onChange={setSlots} onError={setError}
-        preparing={preparing} setPreparing={setPreparing} />
+        preparing={preparing} setPreparing={setPreparing} saving={busy} />
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
     </Sheet>
