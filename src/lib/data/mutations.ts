@@ -64,9 +64,12 @@ export const useRaiseInterest = () =>
 export const useWithdrawListing = () =>
   useRpc<{ p_listing_id: string }>('withdraw_listing', [keys.listings]);
 
-/** Correct the title or description of your own open listing. */
+/**
+ * Correct the title, description or photos of your own open listing.
+ * p_images omitted means "leave the photos as they are".
+ */
 export const useEditListing = () =>
-  useRpc<{ p_listing_id: string; p_title: Translatable; p_description: Translatable }>(
+  useRpc<{ p_listing_id: string; p_title: Translatable; p_description: Translatable; p_images?: string[] }>(
     'edit_listing',
     [keys.listings]
   );
@@ -151,6 +154,8 @@ export function usePublishListing() {
       title: Translatable;
       description: Translatable;
       status: 'open';
+      /** Storage paths, already uploaded; the insert policy checks they are yours. */
+      images: string[];
     }) => bounded(async (signal) => {
       const { error } = await createClient().from('market_listings').insert(row).abortSignal(signal);
       if (error) throw error;

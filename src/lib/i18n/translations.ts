@@ -128,6 +128,20 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'market.withdraw': { en: 'Withdraw', zh: '撤回' },
   'market.edit_listing': { en: 'Edit listing', zh: '修改条目' },
   'market.save': { en: 'Save changes', zh: '保存修改' },
+  // Issue #14: up to three photos on a listing.
+  'market.photos': { en: 'Photos', zh: '照片' },
+  'market.photos_hint': { en: 'Up to 3. The first one is the cover.', zh: '最多 3 张，第一张是封面。' },
+  'market.add_photo': { en: 'Add photo', zh: '添加照片' },
+  'market.preparing': { en: 'Preparing...', zh: '处理中…' },
+  'market.cover': { en: 'Cover', zh: '封面' },
+  'market.make_cover': { en: 'Make cover', zh: '设为封面' },
+  'market.remove_photo': { en: 'Remove photo', zh: '删除照片' },
+  'market.view_photos': { en: 'View photos', zh: '查看照片' },
+  'market.photo_unreadable': {
+    en: "This photo couldn't be read. Try a JPEG or PNG.",
+    zh: '这张照片无法读取，请换一张 JPEG 或 PNG。',
+  },
+  'market.photos_unavailable': { en: "Photos couldn't be loaded. Try again.", zh: '照片加载失败，请重试。' },
   'market.confirm_withdraw': { en: 'Withdraw this listing?', zh: '撤回这条信息？' },
   'market.withdraw_explain': {
     en: 'It disappears from the market for everyone, and nobody can raise a hand on it any more. This cannot be undone — if you change your mind, post it again.',

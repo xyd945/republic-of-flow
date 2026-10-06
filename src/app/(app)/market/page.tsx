@@ -7,6 +7,8 @@ import {
   useAcceptInterest, useDeclineInterest, useEditListing, useMarkMatchMet,
   usePublishListing, useRaiseInterest, useWithdrawListing,
 } from '@/lib/data/mutations';
+import { removePhotos, uploadPhotos, usePhotoLinks } from '@/lib/data/photos';
+import { preparePhoto, UnreadablePhotoError, type PreparedPhoto } from '@/lib/photos';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
@@ -145,10 +147,188 @@ function SentRow({ listing }: { listing: ListingWithCreator }) {
   );
 }
 
+/* ---------------------------------------------------------------- photos */
+
+const MAX_PHOTOS = 3;
+
+/** A photo inside the frame. Never `.pixel`: a photograph must stay smooth. */
+const photoStyle: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'cover', display: 'block' };
+
+/**
+ * The cover on a card — the first photo's thumbnail, the thing that makes
+ * someone stop scrolling. Tapping it opens every photo.
+ */
+function PhotoCover({ listing, onOpen }: { listing: ListingWithCreator; onOpen: () => void }) {
+  const { t, ui } = useI18n();
+  const cover = listing.images[0];
+  const links = usePhotoLinks([cover], 'thumb');
+  const src = links.data?.get(cover);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${ui('market.view_photos')} — ${t(listing.title)}`}
+      style={{
+        display: 'block', width: '100%', aspectRatio: '16 / 9', position: 'relative',
+        padding: 0, margin: '0 0 12px', cursor: 'pointer', overflow: 'hidden',
+        border: '2px solid var(--color-navy-900)', borderRadius: 0, background: 'var(--color-mist-tint)',
+      }}
+    >
+      {src ? <img src={src} alt="" style={photoStyle} /> : null}
+      {listing.images.length > 1 && (
+        <span className="rof-label" style={{
+          position: 'absolute', right: 6, bottom: 6, padding: '4px 6px',
+          background: 'var(--color-navy-900)', color: 'var(--color-on-navy)',
+        }}>1 / {listing.images.length}</span>
+      )}
+    </button>
+  );
+}
+
+/** Every photo on a listing, full size, one under another. */
+function PhotoViewer({ listing, onClose }: { listing: ListingWithCreator; onClose: () => void }) {
+  const { t, ui } = useI18n();
+  const links = usePhotoLinks(listing.images, 'full');
+  return (
+    <Sheet title={t(listing.title)} onClose={onClose}>
+      {links.isPending ? (
+        <div className="grid place-items-center" style={{ minHeight: 160 }}>
+          <PixelSpinner size={20} color="var(--color-gold)" />
+        </div>
+      ) : links.error ? (
+        <ErrorNote>{ui('market.photos_unavailable')}</ErrorNote>
+      ) : (
+        listing.images.map((path) => {
+          const src = links.data?.get(path);
+          return src ? (
+            <img key={path} src={src} alt="" style={{
+              width: '100%', display: 'block', border: '2px solid var(--color-navy-900)',
+            }} />
+          ) : null;
+        })
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * One slot in the form: a photo already on the listing (a storage path), or
+ * one just picked on this phone and not uploaded until Save.
+ */
+type PhotoSlot = { key: string; path?: string; fresh?: PreparedPhoto };
+
+/** Up to three photos; the first is the cover, and any other can be made the cover. */
+function PhotoPicker({
+  slots, onChange, onError,
+}: {
+  slots: PhotoSlot[];
+  onChange: (next: PhotoSlot[]) => void;
+  onError: (message: string) => void;
+}) {
+  const { ui } = useI18n();
+  const input = useRef<HTMLInputElement>(null);
+  const [preparing, setPreparing] = useState(false);
+  const stored = slots.filter((s) => s.path).map((s) => s.path!);
+  const links = usePhotoLinks(stored, 'thumb');
+
+  const pick = async (files: FileList | null) => {
+    const room = MAX_PHOTOS - slots.length;
+    const chosen = Array.from(files ?? []).slice(0, room);
+    if (input.current) input.current.value = '';   // picking the same file again still fires
+    if (!chosen.length) return;
+    setPreparing(true);
+    onError('');
+    const added: PhotoSlot[] = [];
+    for (const file of chosen) {
+      try {
+        const fresh = await preparePhoto(file);
+        added.push({ key: fresh.preview, fresh });
+      } catch (e) {
+        onError(e instanceof UnreadablePhotoError ? ui('market.photo_unreadable') : errText(e));
+      }
+    }
+    setPreparing(false);
+    if (added.length) onChange([...slots, ...added]);
+  };
+
+  const remove = (i: number) => {
+    const gone = slots[i];
+    if (gone.fresh) URL.revokeObjectURL(gone.fresh.preview);
+    onChange(slots.filter((_, j) => j !== i));
+  };
+  const makeCover = (i: number) => onChange([slots[i], ...slots.filter((_, j) => j !== i)]);
+
+  const corner: React.CSSProperties = {
+    position: 'absolute', padding: '3px 5px', border: 'none', borderRadius: 0, cursor: 'pointer',
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 6 }}><Bi en={ui('market.photos')} zh="照片" color="var(--color-gold)" /></div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8 }}>
+        {slots.map((slot, i) => {
+          const src = slot.fresh ? slot.fresh.preview : links.data?.get(slot.path!);
+          return (
+            <div key={slot.key} style={{
+              position: 'relative', aspectRatio: '1 / 1', overflow: 'hidden',
+              border: '2px solid var(--color-navy-900)', background: 'var(--color-mist-tint)',
+            }}>
+              {src ? <img src={src} alt="" style={photoStyle} /> : null}
+              {i === 0 ? (
+                <span className="rof-label" style={{
+                  ...corner, left: 0, bottom: 0, cursor: 'default',
+                  background: 'var(--color-gold)', color: 'var(--color-navy-900)',
+                }}>{ui('market.cover')}</span>
+              ) : (
+                <button type="button" className="rof-label" onClick={() => makeCover(i)} style={{
+                  ...corner, left: 0, bottom: 0,
+                  background: 'var(--color-navy-900)', color: 'var(--color-on-navy)',
+                }}>{ui('market.make_cover')}</button>
+              )}
+              <button type="button" onClick={() => remove(i)} aria-label={ui('market.remove_photo')} style={{
+                ...corner, right: 0, top: 0, minWidth: 28, minHeight: 28, lineHeight: 1,
+                background: 'var(--color-navy-900)', color: 'var(--color-on-navy)', fontSize: 'var(--text-h3)',
+              }}>×</button>
+            </div>
+          );
+        })}
+        {slots.length < MAX_PHOTOS && (
+          <button
+            type="button"
+            onClick={() => input.current?.click()}
+            disabled={preparing}
+            className="rof-label"
+            style={{
+              aspectRatio: '1 / 1', border: '2px dashed var(--color-line-soft)', borderRadius: 0,
+              background: 'var(--color-white)', color: 'var(--color-muted)',
+              cursor: preparing ? 'wait' : 'pointer', padding: 6, lineHeight: 1.3,
+            }}
+          >{preparing ? ui('market.preparing') : `+ ${ui('market.add_photo')}`}</button>
+        )}
+      </div>
+      {/* Visually hidden rather than display:none, which some mobile browsers
+          will not open from a script. */}
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(e) => pick(e.target.files)}
+        tabIndex={-1}
+        aria-hidden
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+      />
+      <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 6 }}>
+        {ui('market.photos_hint')}
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------------------------------------- listing card */
 
 function MarketCard({
-  listing, viewerProfileId, busyKey, onInterest, onAccept, onReject, onEdit, onWithdraw,
+  listing, viewerProfileId, busyKey, onInterest, onAccept, onReject, onEdit, onWithdraw, onPhotos,
 }: {
   listing: ListingWithCreator;
   viewerProfileId: string | null;
@@ -158,6 +338,7 @@ function MarketCard({
   onReject: (i: ListingInterest) => void;
   onEdit: () => void;
   onWithdraw: () => void;
+  onPhotos: () => void;
 }) {
   const { t, ui } = useI18n();
   const isMine = listing.creator_profile_id === viewerProfileId;
@@ -175,6 +356,7 @@ function MarketCard({
 
   return (
     <Panel pad={13} accent={wanted ? 'var(--color-red)' : 'var(--color-sage)'}>
+      {listing.images.length > 0 && <PhotoCover listing={listing} onOpen={onPhotos} />}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <Avatar initials={listing.creator?.initials ?? '?'} id={listing.creator_profile_id} size={38} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -434,6 +616,9 @@ function PublishModal({
   // shows — never an empty field over text that is already there.
   const [title, setTitle] = useState(editing ? t(editing.title) : '');
   const [desc, setDesc] = useState(editing ? t(editing.description) : '');
+  const [slots, setSlots] = useState<PhotoSlot[]>(
+    () => (editing?.images ?? []).map((path) => ({ key: path, path })),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -444,19 +629,36 @@ function PublishModal({
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
+  // Previews of photos picked but never saved are object URLs; free them.
+  const slotsRef = useRef(slots);
+  slotsRef.current = slots;
+  useEffect(() => () => {
+    slotsRef.current.forEach((s) => { if (s.fresh) URL.revokeObjectURL(s.fresh.preview); });
+  }, []);
+
   const publish = async () => {
     if (!title.trim()) { setError(ui('market.need_title')); return; }
     if (!viewerProfileId) { setError(ui('market.profile_loading')); return; }
     setBusy(true);
     setError('');
+    // Uploaded first, then attached: the listing only ever points at photos
+    // that exist. If saving the listing fails, the uploads are taken back.
+    let uploaded: string[] = [];
     try {
+      uploaded = await uploadPhotos(slots.filter((s) => s.fresh).map((s) => s.fresh!));
+      let next = 0;
+      const images = slots.map((s) => s.path ?? uploaded[next++]);
       if (editing) {
         // One text, replaced whole — see edit_listing() in 00013.
         await edit_.mutateAsync({
           p_listing_id: editing.id,
           p_title: { [lang]: title.trim() },
           p_description: { [lang]: desc.trim() },
+          p_images: images,
         });
+        // Photos taken off the listing are deleted only once it no longer
+        // points at them.
+        removePhotos(editing.images.filter((p) => !images.includes(p))).catch(() => {});
       } else {
         await publish_.mutateAsync({
           creator_profile_id: viewerProfileId,
@@ -464,14 +666,17 @@ function PublishModal({
           title: { [lang]: title.trim() },
           description: { [lang]: desc.trim() },
           status: 'open',
+          images,
         });
       }
+      uploaded = [];
       onDone();
       // Only while this sheet is still the one on screen. Dismissed mid-save,
       // it has closed itself already — and closing now would close whichever
       // sheet the member opened since, throwing away what they had typed in it.
       if (alive.current) onClose();
     } catch (e) {
+      removePhotos(uploaded).catch(() => {});
       if (alive.current) setError(errText(e));
     } finally {
       if (alive.current) setBusy(false);
@@ -515,6 +720,8 @@ function PublishModal({
           placeholder={ui('market.desc_placeholder')} />
       </label>
 
+      <PhotoPicker slots={slots} onChange={setSlots} onError={setError} />
+
       {error ? <ErrorNote>{error}</ErrorNote> : null}
     </Sheet>
   );
@@ -535,6 +742,7 @@ export default function MarketPage() {
   const [interestFor, setInterestFor] = useState<ListingWithCreator | null>(null);
   const [showPublish, setShowPublish] = useState(false);
   const [editing, setEditing] = useState<ListingWithCreator | null>(null);
+  const [photosFor, setPhotosFor] = useState<ListingWithCreator | null>(null);
   // Withdrawing cannot be undone from the member's side, so it asks first.
   const [confirmWithdraw, setConfirmWithdraw] = useState<ListingWithCreator | null>(null);
   // Which control is mid-write, e.g. `<interestId>:accept`. A plain boolean
@@ -679,7 +887,8 @@ export default function MarketPage() {
           >
             <MarketCard listing={l} viewerProfileId={viewerProfileId} busyKey={busyKey}
               onInterest={() => setInterestFor(l)} onAccept={acceptInterest} onReject={rejectInterest}
-              onEdit={() => setEditing(l)} onWithdraw={() => setConfirmWithdraw(l)} />
+              onEdit={() => setEditing(l)} onWithdraw={() => setConfirmWithdraw(l)}
+              onPhotos={() => setPhotosFor(l)} />
           </div>
         ))}
       </div>
@@ -777,6 +986,9 @@ export default function MarketPage() {
            and saving wrote A's text over B. */
         <PublishModal key={editing.id} viewerProfileId={viewerProfileId} lang={lang} editing={editing}
           onClose={() => setEditing(null)} onDone={() => {}} />
+      )}
+      {photosFor && (
+        <PhotoViewer key={photosFor.id} listing={photosFor} onClose={() => setPhotosFor(null)} />
       )}
       {confirmWithdraw && (
         <Sheet
