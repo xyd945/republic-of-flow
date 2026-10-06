@@ -219,15 +219,17 @@ type PhotoSlot = { key: string; path?: string; fresh?: PreparedPhoto };
 
 /** Up to three photos; the first is the cover, and any other can be made the cover. */
 function PhotoPicker({
-  slots, onChange, onError,
+  slots, onChange, onError, preparing, setPreparing,
 }: {
   slots: PhotoSlot[];
-  onChange: (next: PhotoSlot[]) => void;
+  onChange: React.Dispatch<React.SetStateAction<PhotoSlot[]>>;
   onError: (message: string) => void;
+  /** Held by the form, so Save waits for photos that are still being shrunk. */
+  preparing: boolean;
+  setPreparing: (on: boolean) => void;
 }) {
   const { ui } = useI18n();
   const input = useRef<HTMLInputElement>(null);
-  const [preparing, setPreparing] = useState(false);
   const stored = slots.filter((s) => s.path).map((s) => s.path!);
   const links = usePhotoLinks(stored, 'thumb');
 
@@ -248,7 +250,9 @@ function PhotoPicker({
       }
     }
     setPreparing(false);
-    if (added.length) onChange([...slots, ...added]);
+    // Onto the slots as they are now: a removal or a new cover made while
+    // these were being shrunk must not be undone.
+    if (added.length) onChange((now) => [...now, ...added]);
   };
 
   const remove = (i: number) => {
@@ -619,6 +623,7 @@ function PublishModal({
   const [slots, setSlots] = useState<PhotoSlot[]>(
     () => (editing?.images ?? []).map((path) => ({ key: path, path })),
   );
+  const [preparing, setPreparing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -642,10 +647,11 @@ function PublishModal({
     setBusy(true);
     setError('');
     // Uploaded first, then attached: the listing only ever points at photos
-    // that exist. If saving the listing fails, the uploads are taken back.
-    let uploaded: string[] = [];
+    // that exist. If saving the listing then fails, the uploads are left
+    // where they are. A timeout does not mean the save did not land, and a
+    // spare file is harmless; a listing pointing at a deleted one is not.
     try {
-      uploaded = await uploadPhotos(slots.filter((s) => s.fresh).map((s) => s.fresh!));
+      const uploaded = await uploadPhotos(slots.filter((s) => s.fresh).map((s) => s.fresh!));
       let next = 0;
       const images = slots.map((s) => s.path ?? uploaded[next++]);
       if (editing) {
@@ -669,14 +675,12 @@ function PublishModal({
           images,
         });
       }
-      uploaded = [];
       onDone();
       // Only while this sheet is still the one on screen. Dismissed mid-save,
       // it has closed itself already — and closing now would close whichever
       // sheet the member opened since, throwing away what they had typed in it.
       if (alive.current) onClose();
     } catch (e) {
-      removePhotos(uploaded).catch(() => {});
       if (alive.current) setError(errText(e));
     } finally {
       if (alive.current) setBusy(false);
@@ -688,7 +692,7 @@ function PublishModal({
       title={editing ? ui('market.edit_listing') : ui('market.new_listing')}
       cn={editing ? '修改条目' : '新条目'} onClose={onClose}
       footer={
-        <Button tone="dark" size="lg" block onClick={publish} loading={busy}>
+        <Button tone="dark" size="lg" block onClick={publish} loading={busy} disabled={preparing}>
           {editing
             ? (busy ? ui('market.saving') : ui('market.save'))
             : (busy ? ui('market.publishing') : ui('market.publish'))}
@@ -720,7 +724,8 @@ function PublishModal({
           placeholder={ui('market.desc_placeholder')} />
       </label>
 
-      <PhotoPicker slots={slots} onChange={setSlots} onError={setError} />
+      <PhotoPicker slots={slots} onChange={setSlots} onError={setError}
+        preparing={preparing} setPreparing={setPreparing} />
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
     </Sheet>

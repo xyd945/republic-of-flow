@@ -124,7 +124,11 @@ begin
   if v_me is null then
     return false;
   end if;
-  if cardinality(p_images) > 3
+  -- One flat list. A text[] column will also hold [["a"]], which passes every
+  -- check below (cardinality and unnest see through the nesting) and would
+  -- hand every reader a list where it expects a path.
+  if array_ndims(p_images) <> 1
+     or cardinality(p_images) > 3
      or cardinality(p_images) <> (select count(distinct x) from unnest(p_images) x) then
     return false;
   end if;

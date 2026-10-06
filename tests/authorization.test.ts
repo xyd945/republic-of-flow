@@ -682,6 +682,17 @@ describe('listing photos (00014)', () => {
     assert.ok((await publishAs(alice, [thumb])).status >= 400, 'a thumbnail path was accepted as a photo');
   });
 
+  it('a list of photos nested inside another list is refused — every reader would crash on it', async () => {
+    const nested = [[photoPath(alice.userId)]];
+    assert.ok((await publishAs(alice, nested as unknown as string[])).status >= 400, 'a nested list was published');
+    const mine = await makeListing(alice.id, 'ZZZ authz nested-photos');
+    const r = await rpc(alice.headers, 'edit_listing', {
+      p_listing_id: mine, p_title: { en: 'x' }, p_description: {}, p_images: nested,
+    });
+    assert.equal(r.status, 400, `a nested list was attached through edit: ${r.status} ${r.body}`);
+    assert.deepEqual(await images(mine), []);
+  });
+
   it("edit_listing cannot attach another member's photo, on a real owned listing", async () => {
     const mine = await makeListing(alice.id, 'ZZZ authz edit-photos');
     const theirs = photoPath(bob.userId);
