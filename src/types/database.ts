@@ -30,6 +30,8 @@ export interface MarketListingsRow {
   status: string;
   suggested_profile_id: string | null;
   suggested_reason: Json | null;
+  /** Up to three storage paths; the first is the cover. See 00014. */
+  images: string[];
   created_at: string;
   updated_at: string;
 }

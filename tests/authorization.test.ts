@@ -68,7 +68,7 @@ const rpc = async (headers: H, fn: string, body: unknown) => {
 };
 
 /** Everything this run created, so cleanup works even if a test throws. */
-const created = { users: [] as string[], listings: [] as string[], matches: [] as string[] };
+const created = { users: [] as string[], listings: [] as string[], matches: [] as string[], objects: [] as string[] };
 
 async function makeMember(tag: string) {
   const email = `zz-authz-${tag}-${Date.now()}${Math.floor(Math.random() * 999)}@example.invalid`;
@@ -149,6 +149,13 @@ before(async () => {
 });
 
 after(async () => {
+  // Photos first: they are keyed by user id, and nothing removes them when
+  // the user goes.
+  if (created.objects.length) {
+    await fetch(`${URL_}/storage/v1/object/listing-images`, {
+      method: 'DELETE', headers: ADMIN, body: JSON.stringify({ prefixes: created.objects }),
+    });
+  }
   // Explicit ids only, and forged rows too — a probe that SUCCEEDS when it
   // should not leaves a row behind, and that is exactly when cleanup matters.
   for (const m of await read<{ id: string }>(`matches?select=id&initiator_profile_id=eq.${alice?.id ?? '00000000-0000-0000-0000-000000000000'}`)) {
@@ -586,6 +593,127 @@ describe('withdrawing and editing a listing (00013)', () => {
       'another member can still see a withdrawn listing');
     assert.equal((await read(`market_listings?select=id&id=eq.${mine}`, alice.headers)).length, 1,
       'the owner lost sight of their own row');
+  });
+});
+
+describe('listing photos (00014)', () => {
+  // A minimal JPEG. Storage checks the declared type, not the bytes, but real
+  // bytes keep the probe honest if that ever changes.
+  const JPEG = Buffer.from(
+    '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////' +
+    '////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBAB' +
+    'AAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
+  const STORE = `${URL_}/storage/v1/object`;
+  const photoPath = (userId: string) => `${userId}/${crypto.randomUUID()}.jpg`;
+
+  const upload = async (who: H, path: string) => {
+    created.objects.push(path);
+    const r = await fetch(`${STORE}/listing-images/${path}`, {
+      method: 'POST', headers: { ...who, 'Content-Type': 'image/jpeg' }, body: JPEG,
+    });
+    return r.status;
+  };
+  /** Whether the file is really there, asked with the service key. */
+  const exists = async (path: string) =>
+    (await fetch(`${STORE}/authenticated/listing-images/${path}`, { headers: ADMIN })).status === 200;
+  const images = async (listingId: string) =>
+    (await one<{ images: string[] }>(`market_listings?select=images&id=eq.${listingId}`)).images;
+  /** Publish as the member, the way the app does: a plain insert. */
+  const publishAs = async (who: Member, paths: string[]) => {
+    const r = await rest('market_listings', {
+      method: 'POST', headers: { ...who.headers, Prefer: 'return=representation' },
+      body: JSON.stringify({ creator_profile_id: who.id, type: 'offer', title: { en: 'ZZZ authz photos' },
+        description: {}, status: 'open', images: paths }),
+    });
+    const rows = r.ok ? await r.json() as { id: string }[] : [];
+    rows.forEach((row) => created.listings.push(row.id));
+    return { status: r.status, id: rows[0]?.id };
+  };
+
+  it('a member can upload into their own folder — the control', async () => {
+    const path = photoPath(alice.userId);
+    assert.ok((await upload(alice.headers, path)) < 300);
+    assert.ok(await exists(path));
+  });
+
+  it("a member cannot upload into another member's folder", async () => {
+    const path = photoPath(bob.userId);
+    assert.ok((await upload(alice.headers, path)) >= 400);
+    assert.equal(await exists(path), false, "a file landed in someone else's folder");
+  });
+
+  it('another member can see a photo; anonymous cannot', async () => {
+    const path = photoPath(alice.userId);
+    await upload(alice.headers, path);
+    const asBob = await fetch(`${STORE}/authenticated/listing-images/${path}`, { headers: bob.headers });
+    assert.equal(asBob.status, 200, 'a signed-in member could not see a photo');
+    const asAnon = await fetch(`${STORE}/authenticated/listing-images/${path}`, { headers: ANON });
+    assert.notEqual(asAnon.status, 200, 'an anonymous caller read a photo');
+    const publicUrl = await fetch(`${STORE}/public/listing-images/${path}`);
+    assert.notEqual(publicUrl.status, 200, 'the bucket is serving photos publicly');
+  });
+
+  it("a member cannot delete another member's photo", async () => {
+    const path = photoPath(bob.userId);
+    await upload(bob.headers, path);
+    await fetch(`${STORE}/listing-images/${path}`, { method: 'DELETE', headers: alice.headers });
+    assert.ok(await exists(path), "a member deleted someone else's photo");
+  });
+
+  it('publishing with your own photo works — the control', async () => {
+    const path = photoPath(alice.userId);
+    await upload(alice.headers, path);
+    const r = await publishAs(alice, [path]);
+    assert.ok(r.status < 300 && r.id, `could not publish with a photo: ${r.status}`);
+    assert.deepEqual(await images(r.id!), [path]);
+  });
+
+  it("publishing cannot point at another member's photo", async () => {
+    const path = photoPath(bob.userId);
+    await upload(bob.headers, path);
+    const r = await publishAs(alice, [path]);
+    assert.ok(r.status >= 400, `a listing borrowed someone else's photo: ${r.status}`);
+  });
+
+  it('publishing refuses a fourth photo, and a thumbnail standing in for a photo', async () => {
+    const four = [0, 1, 2, 3].map(() => photoPath(alice.userId));
+    assert.ok((await publishAs(alice, four)).status >= 400, 'four photos were accepted');
+    const thumb = `${alice.userId}/${crypto.randomUUID()}_t.jpg`;
+    assert.ok((await publishAs(alice, [thumb])).status >= 400, 'a thumbnail path was accepted as a photo');
+  });
+
+  it('a list of photos nested inside another list is refused — every reader would crash on it', async () => {
+    const nested = [[photoPath(alice.userId)]];
+    assert.ok((await publishAs(alice, nested as unknown as string[])).status >= 400, 'a nested list was published');
+    const mine = await makeListing(alice.id, 'ZZZ authz nested-photos');
+    const r = await rpc(alice.headers, 'edit_listing', {
+      p_listing_id: mine, p_title: { en: 'x' }, p_description: {}, p_images: nested,
+    });
+    assert.equal(r.status, 400, `a nested list was attached through edit: ${r.status} ${r.body}`);
+    assert.deepEqual(await images(mine), []);
+  });
+
+  it("edit_listing cannot attach another member's photo, on a real owned listing", async () => {
+    const mine = await makeListing(alice.id, 'ZZZ authz edit-photos');
+    const theirs = photoPath(bob.userId);
+    await upload(bob.headers, theirs);
+    const r = await rpc(alice.headers, 'edit_listing', {
+      p_listing_id: mine, p_title: { en: 'x' }, p_description: {}, p_images: [theirs],
+    });
+    assert.equal(r.status, 400, `borrowed a photo through edit: ${r.status} ${r.body}`);
+    assert.deepEqual(await images(mine), []);
+  });
+
+  it('the client running today, which sends no photos, leaves them alone', async () => {
+    const path = photoPath(alice.userId);
+    await upload(alice.headers, path);
+    const { id } = await publishAs(alice, [path]);
+    // The exact three-argument call the deployed app makes since 00013.
+    const r = await rpc(alice.headers, 'edit_listing', {
+      p_listing_id: id, p_title: { en: 'retitled' }, p_description: {},
+    });
+    assert.ok(r.status < 300, `the old three-argument call broke: ${r.status} ${r.body}`);
+    assert.deepEqual(await images(id!), [path], 'an edit without photos wiped them');
   });
 });
 
