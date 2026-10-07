@@ -49,6 +49,8 @@ export interface MarketListing {
   chips: Translatable[];
   capacity: number | null;
   status: 'draft' | 'open' | 'matched' | 'closed' | 'cancelled';
+  /** Up to three storage paths in listing-images; the first is the cover. */
+  images: string[];
   created_at: string;
   updated_at: string;
 }
