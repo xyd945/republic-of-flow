@@ -10,6 +10,9 @@ import type { ArchiveEvent, ArchiveNote } from '../src/types/index.ts';
  */
 const at = (day: string) => `${day}T12:00:00Z`;
 
+/** A few minutes apart within the same noon hour, for ordering inside one day. */
+const atMinute = (day: string, m: number) => `${day}T11:${String(30 + m).padStart(2, '0')}:00Z`;
+
 let n = 0;
 const founder = (day: string, no = ++n): ArchiveFounder => ({
   id: `p${no}`, founder_no: no, full_name: `Founder ${no}`, native_name: null,
@@ -83,5 +86,58 @@ describe('buildArchive', () => {
     });
     assert.deepEqual(a.entries.filter((e) => e.day === '2026-10-04').map((e) => e.kind), ['note', 'first_listing', 'founders']);
     assert.deepEqual(a.chapters.map((c) => [c.key, c.number]), [['2026-10', 2], ['2026-09', 1], ['2026-08', 0]]);
+  });
+
+  it('folds a busy day\'s round numbers into one card, the highest, above that day\'s arrivals', () => {
+    n = 0;
+    const founders = [founder('2026-08-27')];
+    // 21 more on one day: the 10th and the 20th to arrive are both among them.
+    for (let i = 0; i < 21; i++) founders.push({ ...founder('2026-08-29'), joined_at: atMinute('2026-08-29', i) });
+    const a = buildArchive({ founders, events: [], notes: [] });
+    const day = a.entries.filter((e) => e.day === '2026-08-29');
+    assert.deepEqual(day.map((e) => e.kind), ['founder_milestone', 'founders']);
+    const m = day[0];
+    assert.ok(m.kind === 'founder_milestone');
+    assert.equal(m.count, 20);
+    assert.deepEqual(m.passed, [10, 20]);
+    assert.equal(m.founder.founder_no, 20);
+  });
+
+  it('orders a single day by when things happened, newest first', () => {
+    n = 0;
+    const day = '2026-09-10';
+    const events: ArchiveEvent[] = [
+      { kind: 'first_listing', happened_at: atMinute(day, 0), listing_type: 'wanted', listing_title: { en: 'Alps' } },
+      ...Array.from({ length: 12 }, (_, i) => ({ ...meeting(day, `M${i + 1}`), happened_at: atMinute(day, i + 1) })),
+    ];
+    const a = buildArchive({ founders: [founder('2026-09-01')], events, notes: [] });
+    const label = (e: (typeof a.entries)[number]) =>
+      e.kind === 'meeting_milestone' ? `milestone ${e.count}`
+      : 'listing' in e ? `${e.kind} ${e.listing.title.en}` : e.kind;
+    assert.deepEqual(a.entries.filter((e) => e.day === day).map(label), [
+      'meeting M12', 'meeting M11',
+      'milestone 10', 'meeting M10',
+      'meeting M9', 'meeting M8', 'meeting M7', 'meeting M6', 'meeting M5', 'meeting M4', 'meeting M3', 'meeting M2',
+      'first_meeting M1',
+      'first_listing Alps',
+    ]);
+  });
+
+  it('keeps the database\'s microseconds when two meetings share a millisecond', () => {
+    n = 0;
+    const m = (title: string, happened_at: string): ArchiveEvent => ({ ...meeting('2026-09-10', title), happened_at });
+    const a = buildArchive({
+      founders: [founder('2026-09-01')],
+      events: [
+        m('M3', '2026-09-10T12:00:00.123900+00:00'),
+        m('M2', '2026-09-10T12:00:00.1231+00:00'),
+        m('M1', '2026-09-09T12:00:00+00:00'),
+      ],
+      notes: [],
+    });
+    assert.deepEqual(
+      a.entries.filter((e) => 'listing' in e).map((e) => 'listing' in e && `${e.kind} ${e.listing.title.en}`),
+      ['meeting M3', 'meeting M2', 'first_meeting M1'],
+    );
   });
 });
