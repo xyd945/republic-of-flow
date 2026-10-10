@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n/context';
 import { dayNumber, roman, type ArchiveChapter, type ArchiveEntry, type ArchiveFounder } from '@/lib/archive';
-import { usePhotoLinks } from '@/lib/data/photos';
 import { PhotoCover } from '@/components/photos';
 import { Avatar, Button, Panel, Sprite, StatusChip } from '@/components/pixel';
 
@@ -129,21 +128,6 @@ const prose: React.CSSProperties = {
   margin: '6px 0 0', fontSize: 'var(--text-body)', lineHeight: 1.6, color: 'var(--color-ink-2)',
 };
 
-/** A listing's cover, as a picture only — a meeting card opens nothing. */
-function ListingCover({ path }: { path: string }) {
-  const links = usePhotoLinks([path], 'thumb');
-  const src = links.data?.get(path);
-  return (
-    <div style={{
-      aspectRatio: '16 / 9', overflow: 'hidden', marginBottom: 12,
-      border: '2px solid var(--color-navy-900)', background: 'var(--color-mist-tint)',
-    }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {src ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : null}
-    </div>
-  );
-}
-
 function FounderRow({ f, last }: { f: ArchiveFounder; last: boolean }) {
   const router = useRouter();
   const { ui } = useI18n();
@@ -232,7 +216,6 @@ export function EntryCard({
     case 'meeting':
       return (
         <Panel pad={13}>
-          {entry.listing.cover ? <ListingCover path={entry.listing.cover} /> : null}
           <div className="flex" style={{ gap: 6, flexWrap: 'wrap' }}>
             <StatusChip tone="completed">{ui('archive.chip_met')}</StatusChip>
             <StatusChip tone={entry.listing.type}>{typeWord(entry.listing.type)}</StatusChip>

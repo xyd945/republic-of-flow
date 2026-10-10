@@ -249,6 +249,7 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'archive.note_body_placeholder': { en: 'Tell the founders what happened…', zh: '和大家讲讲发生了什么……' },
   'archive.note_public': { en: 'Every founder can read this. It is signed with your name.', zh: '所有创始人都能读到，署名是你的名字。' },
   'archive.need_title': { en: 'A note needs a title.', zh: '请填写标题。' },
+  'archive.future_date': { en: 'A note cannot be dated in the future.', zh: '日期不能晚于今天。' },
   'archive.publish': { en: 'Publish to the Archive', zh: '发布到档案' },
   'archive.publishing': { en: 'Publishing...', zh: '发布中…' },
   'archive.remove_title': { en: 'Remove this note?', zh: '删除这篇手记？' },

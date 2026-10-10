@@ -913,6 +913,11 @@ describe('the Archive (00015)', () => {
 
   it('a meeting reaches the Archive with no one in it', async () => {
     const listing = await makeListing(bob.id, 'ZZZ authz archive meeting');
+    // With a photo: a photo's path begins with its owner's user id, so a
+    // cover handed back by the Archive would name one of the two.
+    const cover = photoPath(bob.userId);
+    await upload(bob.headers, cover);
+    await rest(`market_listings?id=eq.${listing}`, { method: 'PATCH', headers: ADMIN, body: JSON.stringify({ images: [cover] }) });
     await rpc(alice.headers, 'raise_interest', { p_listing_id: listing, p_message: { en: 'hi' } });
     const interest = (await one<{ id: string }>(`market_interests?select=id&listing_id=eq.${listing}`)).id;
     await rpc(bob.headers, 'accept_interest', { p_interest_id: interest });
@@ -927,7 +932,9 @@ describe('the Archive (00015)', () => {
     const rows = JSON.parse(r.body) as Record<string, unknown>[];
     const mine = rows.filter((row) => row.kind === 'meeting' && JSON.stringify(row.listing_title).includes('ZZZ authz archive meeting'));
     assert.equal(mine.length, 1, 'the meeting is missing from the Archive');
-    assert.deepEqual(Object.keys(mine[0]).sort(), ['happened_at', 'kind', 'listing_cover', 'listing_title', 'listing_type']);
+    for (const row of rows) {
+      assert.deepEqual(Object.keys(row).sort(), ['happened_at', 'kind', 'listing_title', 'listing_type']);
+    }
     for (const secret of [alice.id, bob.id, alice.userId, bob.userId, match, listing]) {
       assert.ok(!r.body.includes(secret), `archive_events leaked an id: ${secret}`);
     }

@@ -141,14 +141,14 @@ export interface ArchiveNote {
 
 /**
  * What archive_events() may say about the private parts of the Republic:
- * that a meeting happened, and which listing opened the Market. Never who.
+ * that a meeting happened, and which listing opened the Market. Never who —
+ * and so never a photo, whose path carries its owner's user id.
  */
 export interface ArchiveEvent {
   kind: 'meeting' | 'first_listing';
   happened_at: string;
   listing_type: 'wanted' | 'offer';
   listing_title: Translatable;
-  listing_cover: string | null;
 }
 
 /** In-app notification centre (00008). */

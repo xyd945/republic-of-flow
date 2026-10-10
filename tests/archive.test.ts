@@ -16,7 +16,7 @@ const founder = (day: string, no = ++n): ArchiveFounder => ({
   initials: 'FF', class_name: 'Class 26', joined_at: at(day),
 });
 const meeting = (day: string, title = 'A listing'): ArchiveEvent => ({
-  kind: 'meeting', happened_at: at(day), listing_type: 'offer', listing_title: { en: title }, listing_cover: null,
+  kind: 'meeting', happened_at: at(day), listing_type: 'offer', listing_title: { en: title },
 });
 const note = (day: string, title: string, created = at(day)): ArchiveNote => ({
   id: title, author_profile_id: 'c1', happened_on: day, title, body: '', images: [], created_at: created, updated_at: created,
@@ -78,7 +78,7 @@ describe('buildArchive', () => {
     n = 0;
     const a = buildArchive({
       founders: [founder('2026-09-01'), founder('2026-10-04')],
-      events: [{ kind: 'first_listing', happened_at: at('2026-10-04'), listing_type: 'wanted', listing_title: { en: 'Alps' }, listing_cover: null }],
+      events: [{ kind: 'first_listing', happened_at: at('2026-10-04'), listing_type: 'wanted', listing_title: { en: 'Alps' } }],
       notes: [note('2026-10-04', 'Dinner'), note('2026-08-20', 'Before it all')],
     });
     assert.deepEqual(a.entries.filter((e) => e.day === '2026-10-04').map((e) => e.kind), ['note', 'first_listing', 'founders']);

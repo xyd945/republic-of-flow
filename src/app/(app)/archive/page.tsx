@@ -197,6 +197,11 @@ function NoteSheet({
 
   const submit = async () => {
     if (!title.trim()) { setError(ui('archive.need_title')); return; }
+    // The input's max only marks a later date invalid; it does not stop this
+    // handler. And the database allows a day of slack for timezones, so a
+    // date one day ahead would get through both. Checked here, against the
+    // curator's own today. Both are YYYY-MM-DD, so they compare as strings.
+    if (date > max) { setError(ui('archive.future_date')); return; }
     setBusy(true);
     setError('');
     // Uploaded first, then attached, exactly as a listing does it. If saving

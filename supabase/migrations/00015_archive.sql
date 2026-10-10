@@ -11,7 +11,9 @@
 --   meetings            matches marked met. NO NAMES: a match is private to
 --                       the two people and the curators, so the Archive is
 --                       told only that one happened, when, and over which
---                       listing. archive_events() below is the only way in.
+--                       listing — its type and title, never its photos,
+--                       whose paths begin with the owner's user id.
+--                       archive_events() below is the only way in.
 --   the Market opening  the first listing's title and type, nothing more.
 --   milestones          counted in the app from the above.
 --   curator notes       archive_notes (new, below).
@@ -238,29 +240,29 @@ grant execute on function delete_archive_note(uuid) to authenticated;
 -- Matches are visible only to the two people and the curators, and a closed
 -- listing only to its owner. This function reads past both, so it returns
 -- exactly what the Archive prints and nothing that identifies a person: no
--- profile ids, no match ids, no listing ids.
+-- profile ids, no match ids, no listing ids — and no photo, because a storage
+-- path is <owner's user id>/<photo>.jpg and would name one of the two.
 -- ============================================
 create or replace function archive_events()
 returns table (
   kind          text,
   happened_at   timestamptz,
   listing_type  text,
-  listing_title jsonb,
-  listing_cover text
+  listing_title jsonb
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select 'meeting', m.completed_at, l.type, l.title, l.images[1]
+  select 'meeting', m.completed_at, l.type, l.title
     from public.matches m
     join public.market_listings l on l.id = m.listing_id
    where auth.uid() is not null
      and m.status = 'completed'
      and m.completed_at is not null
   union all
-  (select 'first_listing', l.created_at, l.type, l.title, l.images[1]
+  (select 'first_listing', l.created_at, l.type, l.title
      from public.market_listings l
     where auth.uid() is not null
       and l.status not in ('draft', 'cancelled')

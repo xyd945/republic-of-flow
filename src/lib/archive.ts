@@ -22,7 +22,7 @@ export type ArchiveFounder = {
   joined_at: string;
 };
 
-export type ListingRef = { type: 'wanted' | 'offer'; title: Translatable; cover: string | null };
+export type ListingRef = { type: 'wanted' | 'offer'; title: Translatable };
 
 /** `day` is a local calendar day, YYYY-MM-DD. */
 export type ArchiveEntry =
@@ -128,7 +128,7 @@ export function buildArchive({
   const meetings = events
     .filter((e) => e.kind === 'meeting')
     .sort((a, b) => (a.happened_at < b.happened_at ? -1 : a.happened_at > b.happened_at ? 1 : 0));
-  const ref = (e: ArchiveEvent): ListingRef => ({ type: e.listing_type, title: e.listing_title, cover: e.listing_cover });
+  const ref = (e: ArchiveEvent): ListingRef => ({ type: e.listing_type, title: e.listing_title });
   // Pushed newest first, so the stable sort below keeps a busy day in order.
   for (let i = meetings.length - 1; i >= 0; i--) {
     const day = localDay(meetings[i].happened_at);
