@@ -68,7 +68,7 @@ const rpc = async (headers: H, fn: string, body: unknown) => {
 };
 
 /** Everything this run created, so cleanup works even if a test throws. */
-const created = { users: [] as string[], listings: [] as string[], matches: [] as string[], objects: [] as string[] };
+const created = { users: [] as string[], listings: [] as string[], matches: [] as string[], objects: [] as string[], notes: [] as string[] };
 
 async function makeMember(tag: string) {
   const email = `zz-authz-${tag}-${Date.now()}${Math.floor(Math.random() * 999)}@example.invalid`;
@@ -156,6 +156,9 @@ after(async () => {
       method: 'DELETE', headers: ADMIN, body: JSON.stringify({ prefixes: created.objects }),
     });
   }
+  for (const id of created.notes) {
+    await rest(`archive_notes?id=eq.${id}`, { method: 'DELETE', headers: ADMIN });
+  }
   // Explicit ids only, and forged rows too — a probe that SUCCEEDS when it
   // should not leaves a row behind, and that is exactly when cleanup matters.
   for (const m of await read<{ id: string }>(`matches?select=id&initiator_profile_id=eq.${alice?.id ?? '00000000-0000-0000-0000-000000000000'}`)) {
@@ -180,7 +183,7 @@ after(async () => {
 // ---------------------------------------------------------------------------
 
 describe('anonymous access (00005)', () => {
-  const TABLES = ['profiles', 'profile_hidden_worlds', 'market_listings', 'market_interests', 'matches', 'notifications'];
+  const TABLES = ['profiles', 'profile_hidden_worlds', 'market_listings', 'market_interests', 'matches', 'notifications', 'archive_notes'];
 
   for (const table of TABLES) {
     it(`${table} is refused outright, not merely empty`, async () => {
@@ -197,7 +200,8 @@ describe('anonymous access (00005)', () => {
 
   for (const fn of ['accept_interest', 'decline_interest', 'dismatch', 'mark_match_met',
                     'curator_suggest', 'curator_update_member', 'save_profile',
-                    'raise_interest', 'mark_notifications_read', 'add_notification']) {
+                    'raise_interest', 'mark_notifications_read', 'add_notification',
+                    'save_archive_note', 'delete_archive_note', 'archive_events']) {
     it(`${fn}() is not callable anonymously`, async () => {
       const r = await rpc(ANON, fn, {});
       assert.ok(r.status >= 400, `${fn} answered ${r.status} to an anonymous caller`);
@@ -596,28 +600,30 @@ describe('withdrawing and editing a listing (00013)', () => {
   });
 });
 
-describe('listing photos (00014)', () => {
-  // A minimal JPEG. Storage checks the declared type, not the bytes, but real
-  // bytes keep the probe honest if that ever changes.
-  const JPEG = Buffer.from(
-    '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////' +
-    '////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBAB' +
-    'AAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
-  const STORE = `${URL_}/storage/v1/object`;
-  const photoPath = (userId: string) => `${userId}/${crypto.randomUUID()}.jpg`;
+// Photo helpers, shared by the listing photos and the Archive.
+// A minimal JPEG. Storage checks the declared type, not the bytes, but real
+// bytes keep the probe honest if that ever changes.
+const JPEG = Buffer.from(
+  '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////' +
+  '////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBAB' +
+  'AAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
+const STORE = `${URL_}/storage/v1/object`;
+const photoPath = (userId: string) => `${userId}/${crypto.randomUUID()}.jpg`;
 
-  const upload = async (who: H, path: string) => {
-    created.objects.push(path);
-    const r = await fetch(`${STORE}/listing-images/${path}`, {
-      method: 'POST', headers: { ...who, 'Content-Type': 'image/jpeg' }, body: JPEG,
-    });
-    return r.status;
-  };
-  /** Whether the file is really there, asked with the service key. */
-  const exists = async (path: string) =>
-    (await fetch(`${STORE}/authenticated/listing-images/${path}`, { headers: ADMIN })).status === 200;
-  const images = async (listingId: string) =>
-    (await one<{ images: string[] }>(`market_listings?select=images&id=eq.${listingId}`)).images;
+const upload = async (who: H, path: string) => {
+  created.objects.push(path);
+  const r = await fetch(`${STORE}/listing-images/${path}`, {
+    method: 'POST', headers: { ...who, 'Content-Type': 'image/jpeg' }, body: JPEG,
+  });
+  return r.status;
+};
+/** Whether the file is really there, asked with the service key. */
+const exists = async (path: string) =>
+  (await fetch(`${STORE}/authenticated/listing-images/${path}`, { headers: ADMIN })).status === 200;
+const images = async (listingId: string) =>
+  (await one<{ images: string[] }>(`market_listings?select=images&id=eq.${listingId}`)).images;
+
+describe('listing photos (00014)', () => {
   /** Publish as the member, the way the app does: a plain insert. */
   const publishAs = async (who: Member, paths: string[]) => {
     const r = await rest('market_listings', {
@@ -800,5 +806,142 @@ describe('notifications are private correspondence (00008)', () => {
   it('notification_payload() is internal and not callable by a client', async () => {
     const r = await rpc(alice.headers, 'notification_payload', { p_actor_id: bob.id });
     assert.ok(r.status >= 400, `notification_payload was callable: ${r.status}`);
+  });
+});
+
+describe('the Archive (00015)', () => {
+  let curator2: Member;
+  let carol: Member;
+  const today = new Date().toISOString().slice(0, 10);
+
+  before(async () => {
+    curator2 = await makeMember('curator2');
+    await rest(`profiles?id=eq.${curator2.id}`, {
+      method: 'PATCH', headers: ADMIN, body: JSON.stringify({ is_curator: true }),
+    });
+    carol = await makeMember('carol');
+  });
+
+  const save = async (who: Member, args: { id?: string | null; on?: string; title?: string; body?: string; images?: unknown }) => {
+    const r = await rpc(who.headers, 'save_archive_note', {
+      p_id: args.id ?? null, p_happened_on: args.on ?? today, p_title: args.title ?? 'ZZZ authz note',
+      p_body: args.body ?? '', p_images: args.images ?? [],
+    });
+    if (r.status < 300) created.notes.push(JSON.parse(r.body));
+    return r;
+  };
+  const note = async (id: string) =>
+    one<{ title: string; images: string[]; author_profile_id: string | null }>(`archive_notes?select=title,images,author_profile_id&id=eq.${id}`);
+
+  it('a curator can write a note with their own photo — the control', async () => {
+    const path = photoPath(curator.userId);
+    await upload(curator.headers, path);
+    const r = await save(curator, { title: 'ZZZ authz dinner', images: [path] });
+    assert.ok(r.status < 300, `a curator could not write: ${r.status} ${r.body}`);
+    const row = await note(JSON.parse(r.body));
+    assert.deepEqual(row.images, [path]);
+    assert.equal(row.author_profile_id, curator.id);
+  });
+
+  it('every member can read the notes', async () => {
+    const r = await save(curator, { title: 'ZZZ authz readable' });
+    const rows = await read<{ id: string }>(`archive_notes?select=id&id=eq.${JSON.parse(r.body)}`, alice.headers);
+    assert.equal(rows.length, 1, 'a member could not read a curator note');
+  });
+
+  it('a member cannot write a note, through the function or directly', async () => {
+    const r = await save(alice, { title: 'ZZZ authz forged' });
+    assert.equal(r.status, 403, `a member wrote in the Archive: ${r.status} ${r.body}`);
+    const direct = await rest('archive_notes', {
+      method: 'POST', headers: { ...alice.headers, Prefer: 'return=representation' },
+      body: JSON.stringify({ happened_on: today, title: 'ZZZ authz forged direct' }),
+    });
+    assert.ok(direct.status >= 400, `a direct insert went through: ${direct.status}`);
+    assert.equal((await read(`archive_notes?select=id&title=like.ZZZ%20authz%20forged*`)).length, 0, 'a forged note exists');
+  });
+
+  it("a member cannot change or delete a curator's note directly", async () => {
+    const id = JSON.parse((await save(curator, { title: 'ZZZ authz untouchable' })).body);
+    await rest(`archive_notes?id=eq.${id}`, { method: 'PATCH', headers: alice.headers, body: JSON.stringify({ title: 'defaced' }) });
+    await rest(`archive_notes?id=eq.${id}`, { method: 'DELETE', headers: alice.headers });
+    assert.equal((await note(id)).title, 'ZZZ authz untouchable', 'a member changed or removed a note');
+    const r = await rpc(alice.headers, 'delete_archive_note', { p_id: id });
+    assert.equal(r.status, 403, `a member removed a note: ${r.status} ${r.body}`);
+    assert.ok(await note(id));
+  });
+
+  it("a curator cannot attach another member's photo, a thumbnail, a fourth photo or a nested list", async () => {
+    const theirs = photoPath(alice.userId);
+    await upload(alice.headers, theirs);
+    assert.equal((await save(curator, { images: [theirs] })).status, 400, "borrowed a member's photo");
+    assert.equal((await save(curator, { images: [`${curator.userId}/${crypto.randomUUID()}_t.jpg`] })).status, 400, 'a thumbnail was accepted');
+    const four = [0, 1, 2, 3].map(() => photoPath(curator.userId));
+    assert.equal((await save(curator, { images: four })).status, 400, 'four photos were accepted');
+    assert.equal((await save(curator, { images: [[photoPath(curator.userId)]] })).status, 400, 'a nested list was accepted');
+  });
+
+  it("another curator can correct a colleague's note and keep its photos, but not add someone else's", async () => {
+    const path = photoPath(curator.userId);
+    await upload(curator.headers, path);
+    const id = JSON.parse((await save(curator, { title: 'ZZZ authz shared', images: [path] })).body);
+
+    const kept = await save(curator2, { id, title: 'ZZZ authz shared, corrected', images: [path] });
+    assert.ok(kept.status < 300, `a colleague could not keep the photos: ${kept.status} ${kept.body}`);
+    assert.deepEqual((await note(id)).images, [path]);
+
+    const theirs = photoPath(alice.userId);
+    await upload(alice.headers, theirs);
+    const borrowed = await save(curator2, { id, images: [path, theirs] });
+    assert.equal(borrowed.status, 400, `a member's photo got onto a note: ${borrowed.status}`);
+    assert.deepEqual((await note(id)).images, [path]);
+  });
+
+  it('a note cannot be dated in the future', async () => {
+    const r = await save(curator, { on: '2999-01-01' });
+    assert.equal(r.status, 400, `a future note was written: ${r.status}`);
+  });
+
+  it('a curator can remove a note, and gets its photos back to delete', async () => {
+    const path = photoPath(curator.userId);
+    await upload(curator.headers, path);
+    const id = JSON.parse((await save(curator, { title: 'ZZZ authz removable', images: [path] })).body);
+    const r = await rpc(curator2.headers, 'delete_archive_note', { p_id: id });
+    assert.ok(r.status < 300, `${r.status} ${r.body}`);
+    assert.deepEqual(JSON.parse(r.body), [path]);
+    assert.equal((await read(`archive_notes?select=id&id=eq.${id}`)).length, 0);
+  });
+
+  it('a meeting reaches the Archive with no one in it', async () => {
+    const listing = await makeListing(bob.id, 'ZZZ authz archive meeting');
+    await rpc(alice.headers, 'raise_interest', { p_listing_id: listing, p_message: { en: 'hi' } });
+    const interest = (await one<{ id: string }>(`market_interests?select=id&listing_id=eq.${listing}`)).id;
+    await rpc(bob.headers, 'accept_interest', { p_interest_id: interest });
+    const match = (await one<{ id: string }>(`matches?select=id&listing_id=eq.${listing}`)).id;
+    created.matches.push(match);
+    const met = await rpc(alice.headers, 'mark_match_met', { p_match_id: match });
+    assert.ok(met.status < 300, `fixture: mark_match_met failed ${met.status} ${met.body}`);
+
+    // Read by someone who is in neither the match nor the listing.
+    const r = await rpc(carol.headers, 'archive_events', {});
+    assert.ok(r.status < 300, `${r.status} ${r.body}`);
+    const rows = JSON.parse(r.body) as Record<string, unknown>[];
+    const mine = rows.filter((row) => row.kind === 'meeting' && JSON.stringify(row.listing_title).includes('ZZZ authz archive meeting'));
+    assert.equal(mine.length, 1, 'the meeting is missing from the Archive');
+    assert.deepEqual(Object.keys(mine[0]).sort(), ['happened_at', 'kind', 'listing_cover', 'listing_title', 'listing_type']);
+    for (const secret of [alice.id, bob.id, alice.userId, bob.userId, match, listing]) {
+      assert.ok(!r.body.includes(secret), `archive_events leaked an id: ${secret}`);
+    }
+  });
+
+  it('arriving stamps joined_at, and a member cannot rewrite it', async () => {
+    const claimed = await rpc(carol.headers, 'claim_membership', {});
+    assert.ok(claimed.status < 300, `fixture: claim_membership failed ${claimed.status} ${claimed.body}`);
+    const at = (await one<{ joined_at: string | null }>(`profiles?select=joined_at&id=eq.${carol.id}`)).joined_at;
+    assert.ok(at, 'claiming a founder number did not stamp joined_at');
+    await rest(`profiles?id=eq.${carol.id}`, {
+      method: 'PATCH', headers: carol.headers, body: JSON.stringify({ joined_at: '2000-01-01T00:00:00Z' }),
+    });
+    assert.equal((await one<{ joined_at: string }>(`profiles?select=joined_at&id=eq.${carol.id}`)).joined_at, at,
+      'a member rewrote their own arrival date');
   });
 });

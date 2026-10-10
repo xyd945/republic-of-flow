@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n/context';
-import { useListings, usePeople } from '@/lib/data/views';
+import { useArchive, useListings, usePeople } from '@/lib/data/views';
+import { dayNumber } from '@/lib/archive';
+import { fill, useArchiveWords } from '@/components/archive';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
 import {
@@ -23,6 +25,8 @@ export default function HomePage() {
   const { t, ui, lang } = useI18n();
   const { listings, viewerProfileId, loading, error } = useListings();
   const { people: profiles } = usePeople();
+  const { archive } = useArchive();
+  const { describe, dateLabel } = useArchiveWords();
   const [shuffleIdx, setShuffleIdx] = useState(0);
 
   // Resolved after mount — the server's clock would cause a hydration mismatch.
@@ -106,6 +110,43 @@ export default function HomePage() {
         { icon: 'stat-worlds', value: worldCount, label: 'Worlds', cn: '隐藏世界' },
         { icon: 'handshake', value: openMarket.length, label: 'Open', cn: '进行中' },
       ]} />
+
+      {/* the latest page of the Archive (issue #4). Hidden rather than an error
+          if it has not loaded: Home must not fail because of it. */}
+      {archive.entries[0] && (() => {
+        const latest = archive.entries[0];
+        const w = describe(latest);
+        const n = dayNumber(archive.founding, latest.day);
+        return (
+          <section>
+            <SectionHeader icon="nav-constitution" cn="档案" className="mb-3"
+              trailing={<SecAction en="Read all" zh="全部" onClick={() => router.push('/archive')} />}>
+              Archive
+            </SectionHeader>
+            <Panel tone="gold" pad={14} ariaLabel={ui('archive.title')} onClick={() => router.push('/archive')}>
+              <div className="flex items-start" style={{ gap: 14 }}>
+                <Sprite name={w.icon} size={36} />
+                <div style={{ minWidth: 0 }}>
+                  <span className="rof-label" style={{ color: '#6B5223', fontSize: 11 }}>
+                    {n ? fill(ui('archive.latest'), { n, what: w.what }) : dateLabel(latest.day, archive.founding)}
+                  </span>
+                  <div style={{
+                    marginTop: 8, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
+                    letterSpacing: 'var(--tracking-display)', textTransform: latest.kind === 'note' ? 'none' : 'uppercase',
+                    color: 'var(--color-ink)', lineHeight: 1.4,
+                  }}>{w.title}</div>
+                  {w.body ? (
+                    <div style={{
+                      marginTop: 5, fontSize: 'var(--text-body)', lineHeight: 1.6, color: 'var(--color-ink-2)',
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    }}>{w.body}</div>
+                  ) : null}
+                </div>
+              </div>
+            </Panel>
+          </section>
+        );
+      })()}
 
       {/* discover someone new */}
       {spot && (

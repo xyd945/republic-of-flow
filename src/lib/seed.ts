@@ -4,6 +4,9 @@ const hw = (id: string, profileId: string, name: Record<string, string>, categor
   id, profile_id: profileId, name, category, visibility: 'members', sort_order: order, created_at: '2025-01-01',
 });
 
+/** A local demo arrival, so the Archive has a history to tell. */
+const arrived = (daysAgo: number) => new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+
 export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
   {
     id: 'p1', user_id: 'u1', full_name: 'Mariana Voss', native_name: null, initials: 'MV',
@@ -12,7 +15,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Climate finance, ESG frameworks, venture investing in hard-tech decarbonization.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'whatsapp', contact_value: '+31 6 1234 5678',
-    is_active: true, is_featured: true, is_curator: false, founder_no: 1,
+    is_active: true, is_featured: true, is_curator: false, founder_no: 1, joined_at: arrived(40),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw1', 'p1', { en: 'Fermenting hot sauces' }, 'craft', 0),
@@ -31,7 +34,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Edtech, product-led growth, SEA market entry.' },
     bio: null, avatar_url: null, preferred_language: 'zh',
     contact_kind: 'wechat', contact_value: 'siyuan_chen88',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 2,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 2, joined_at: arrived(29),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw4', 'p2', { en: 'Competitive mahjong', zh: '竞技麻将' }, 'mind', 0),
@@ -49,7 +52,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Legal tech, access to justice, social enterprise.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'whatsapp', contact_value: '+52 55 1234 5678',
-    is_active: true, is_featured: true, is_curator: false, founder_no: 3,
+    is_active: true, is_featured: true, is_curator: false, founder_no: 3, joined_at: arrived(29),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw6', 'p3', { en: 'Mezcal distillation' }, 'craft', 0),
@@ -68,7 +71,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Supply chain, logistics optimization, Thailand market.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'email', contact_value: 'pich@novatrade.co',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 4,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 4, joined_at: arrived(29),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw9', 'p4', { en: 'Thai boxing coaching' }, 'nature', 0),
@@ -86,7 +89,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Payments, mobile UX, Korean fintech.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'email', contact_value: 'jisoo@paybridge.kr',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 5,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 5, joined_at: arrived(29),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw11', 'p5', { en: 'Ceramics & pottery' }, 'art', 0),
@@ -105,7 +108,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Biotech operations, clinical trials, regulatory strategy.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'email', contact_value: 'oliver@meridiantx.com',
-    is_active: true, is_featured: false, is_curator: true, founder_no: 6,
+    is_active: true, is_featured: false, is_curator: true, founder_no: 6, joined_at: arrived(29),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw14', 'p6', { en: 'Amateur astronomy' }, 'nature', 0),
@@ -123,7 +126,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Circular economy, sustainable materials, fashion supply chain.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'whatsapp', contact_value: '+971 50 123 4567',
-    is_active: true, is_featured: true, is_curator: false, founder_no: 7,
+    is_active: true, is_featured: true, is_curator: false, founder_no: 7, joined_at: arrived(22),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw16', 'p7', { en: 'Arabic calligraphy' }, 'art', 0),
@@ -142,7 +145,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Proptech, modular construction, Nordic real estate.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'email', contact_value: 'henrik@stackedliving.se',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 8,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 8, joined_at: arrived(15),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw19', 'p8', { en: 'Sourdough baking' }, 'craft', 0),
@@ -160,7 +163,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Health-tech UX, digital therapeutics, medical device design.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'whatsapp', contact_value: '+91 98765 43210',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 9,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 9, joined_at: arrived(15),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw21', 'p9', { en: 'Bharatanatyam dance' }, 'art', 0),
@@ -178,7 +181,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Agritech, financial inclusion, Brazil market.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'whatsapp', contact_value: '+55 11 99876 5432',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 10,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 10, joined_at: arrived(9),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw23', 'p10', { en: 'Capoeira' }, 'nature', 0),
@@ -197,7 +200,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Deep-tech VC, robotics, advanced manufacturing.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'email', contact_value: 'yuki@kyotovc.jp',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 11,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 11, joined_at: arrived(4),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw26', 'p11', { en: 'Bonsai cultivation' }, 'nature', 0),
@@ -215,7 +218,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'AI governance, tech policy, algorithmic auditing.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'email', contact_value: 'nadia@oii.ox.ac.uk',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 12,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 12, joined_at: arrived(4),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw28', 'p12', { en: 'Soviet cinema restoration' }, 'art', 0),
@@ -234,7 +237,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
     professional: { en: 'Creator economy, content platforms, Africa market.' },
     bio: null, avatar_url: null, preferred_language: 'en',
     contact_kind: 'whatsapp', contact_value: '+234 803 123 4567',
-    is_active: true, is_featured: false, is_curator: false, founder_no: 13,
+    is_active: true, is_featured: false, is_curator: false, founder_no: 13, joined_at: arrived(4),
     created_at: '2025-01-01', updated_at: '2025-01-01',
     hidden_worlds: [
       hw('hw31', 'p13', { en: 'Afrobeat drumming' }, 'art', 0),
