@@ -18,6 +18,9 @@ export const keys = {
   interests: ['interests'] as const,
   matches: ['matches'] as const,
   notifications: ['notifications'] as const,
+  archiveNotes: ['archive_notes'] as const,
+  /** Computed from matches and listings, so writes to either refresh it. */
+  archiveEvents: ['archive_events'] as const,
   session: ['session'] as const,
 };
 

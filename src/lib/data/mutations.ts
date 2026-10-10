@@ -62,7 +62,7 @@ export const useRaiseInterest = () =>
  * for it afterwards. Owner-only and open-only, checked inside the function.
  */
 export const useWithdrawListing = () =>
-  useRpc<{ p_listing_id: string }>('withdraw_listing', [keys.listings]);
+  useRpc<{ p_listing_id: string }>('withdraw_listing', [keys.listings, keys.archiveEvents]);
 
 /**
  * Correct the title, description or photos of your own open listing.
@@ -91,7 +91,7 @@ export const useDeclineInterest = () =>
 export const useMarkMatchMet = () =>
   useRpc<{ p_match_id: string }>(
     'mark_match_met',
-    [keys.matches, keys.notifications]
+    [keys.matches, keys.notifications, keys.archiveEvents]
   );
 
 // ---------------------------------------------------------------- curator
@@ -100,7 +100,7 @@ export const useMarkMatchMet = () =>
 export const useDismatch = () =>
   useRpc<{ p_match_id: string }>(
     'dismatch',
-    [keys.matches, keys.listings, keys.interests, keys.notifications]
+    [keys.matches, keys.listings, keys.interests, keys.notifications, keys.archiveEvents]
   );
 
 export const useCuratorSuggest = () =>
@@ -117,6 +117,23 @@ export const useCuratorUpdateMember = () =>
     p_is_active: boolean | null;
     p_class_name: string | null;
   }>('curator_update_member', [keys.profiles]);
+
+// ---------------------------------------------------------------- archive
+
+/**
+ * Write a note (p_id null) or correct one. Curator-only, checked inside the
+ * function, as are the photos: fresh uploads in your own folder, or ones
+ * already on the note — see 00015.
+ */
+export const useSaveArchiveNote = () =>
+  useRpc<{ p_id: string | null; p_happened_on: string; p_title: string; p_body: string; p_images: string[] }>(
+    'save_archive_note',
+    [keys.archiveNotes]
+  );
+
+/** Removes the note and returns its photos, so the caller can delete the files. */
+export const useDeleteArchiveNote = () =>
+  useRpc<{ p_id: string }>('delete_archive_note', [keys.archiveNotes]);
 
 // ---------------------------------------------------------------- membership
 
@@ -160,7 +177,11 @@ export function usePublishListing() {
       const { error } = await createClient().from('market_listings').insert(row).abortSignal(signal);
       if (error) throw error;
     }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.listings }),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: keys.listings }),
+      // The first listing ever posted opens the Market in the Archive.
+      qc.invalidateQueries({ queryKey: keys.archiveEvents }),
+    ]),
   });
 }
 

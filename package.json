@@ -13,7 +13,8 @@
     "test:authz": "node --experimental-strip-types --test tests/authorization.test.ts",
     "test:settling": "node --test --experimental-strip-types tests/settling.test.ts",
     "test:initials": "node --test --experimental-strip-types tests/initials.test.ts",
-    "test:local-env": "node --test --experimental-strip-types tests/local-env.test.ts"
+    "test:local-env": "node --test --experimental-strip-types tests/local-env.test.ts",
+    "test:archive": "node --test --experimental-strip-types tests/archive.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

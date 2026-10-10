@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { buildArchive, type ArchiveFounder } from '@/lib/archive';
 import {
+  useArchiveEventsQuery,
+  useArchiveNotesQuery,
   useHiddenWorldsQuery,
   useInterestsQuery,
   useListingsQuery,
@@ -227,5 +230,42 @@ export function useCuratorView() {
     viewerProfileId: people.viewerProfileId,
     loading: people.loading || listings.loading || matches.loading,
     error: people.error || listings.error || matches.error,
+  };
+}
+
+/**
+ * The Archive (issue #4): who arrived when, from profiles; meetings and the
+ * Market's opening, anonymously, from archive_events(); and the curators'
+ * notes. The story itself is assembled in lib/archive.
+ *
+ * Only ACTIVE founders are told. RLS shows a curator inactive rows too, and
+ * the history must read the same to everyone.
+ */
+export function useArchive() {
+  const { people, viewerProfileId, loading: peopleLoading, error: peopleError } = usePeople();
+  const notes = useArchiveNotesQuery();
+  const events = useArchiveEventsQuery();
+
+  const archive = useMemo(() => {
+    const founders: ArchiveFounder[] = people
+      .filter((p) => p.is_active && p.founder_no !== null && p.joined_at)
+      .map((p) => ({
+        id: p.id, founder_no: p.founder_no!, full_name: p.full_name, native_name: p.native_name,
+        initials: p.initials, class_name: p.class_name, joined_at: p.joined_at!,
+      }));
+    return buildArchive({ founders, events: events.data ?? [], notes: notes.data ?? [] });
+  }, [people, events.data, notes.data]);
+
+  const viewer = people.find((p) => p.id === viewerProfileId);
+  const loading = peopleLoading || notes.isPending || events.isPending;
+  const stuck = useStuck(loading);
+  return {
+    archive,
+    people,
+    isCurator: !!viewer?.is_curator,
+    noteCount: notes.data?.length ?? 0,
+    meetingCount: (events.data ?? []).filter((e) => e.kind === 'meeting').length,
+    loading: loading && !stuck,
+    error: peopleError || firstError(notes, events) || (stuck ? STUCK_MESSAGE : ''),
   };
 }

@@ -25,6 +25,9 @@ export interface Profile {
   /** null until the member actually signs in — an invitation alone earns no
       number. Allocated by claim_membership(); see migration 00011. */
   founder_no: number | null;
+  /** When the founder number was taken — arriving, as the Archive tells it.
+      Stamped by the database (00015); null until then. */
+  joined_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -120,6 +123,32 @@ export interface MatchWithParties extends Match {
   initiator?: ProfileWithHiddenWorlds;
   matched?: ProfileWithHiddenWorlds;
   listing?: MarketListing;
+}
+
+/** A curator's note in the Archive (00015). Plain text, as typed. */
+export interface ArchiveNote {
+  id: string;
+  author_profile_id: string | null;
+  /** YYYY-MM-DD: the day it happened, which may be before it was written. */
+  happened_on: string;
+  title: string;
+  body: string;
+  /** Up to three storage paths in listing-images; the first is the cover. */
+  images: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * What archive_events() may say about the private parts of the Republic:
+ * that a meeting happened, and which listing opened the Market. Never who —
+ * and so never a photo, whose path carries its owner's user id.
+ */
+export interface ArchiveEvent {
+  kind: 'meeting' | 'first_listing';
+  happened_at: string;
+  listing_type: 'wanted' | 'offer';
+  listing_title: Translatable;
 }
 
 /** In-app notification centre (00008). */
