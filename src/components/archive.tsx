@@ -63,6 +63,10 @@ export function useArchiveWords() {
   const chapterLabel = (c: ArchiveChapter) =>
     c.number ? fill(ui('archive.chapter'), { n: lang === 'zh' ? c.number : roman(c.number) }) : ui('archive.prologue');
 
+  /** 10, 20 and 30 · 10、20、30 */
+  const listOf = (ns: number[]) =>
+    lang === 'zh' || ns.length < 2 ? ns.join(lang === 'zh' ? '、' : ', ') : `${ns.slice(0, -1).join(', ')} and ${ns[ns.length - 1]}`;
+
   const names = (fs: ArchiveFounder[]) =>
     fs.slice(0, 3).map((f) => f.full_name).join(', ') + (fs.length > 3 ? ` +${fs.length - 3}` : '');
 
@@ -83,7 +87,9 @@ export function useArchiveWords() {
         return {
           what: ui('archive.chip_milestone'),
           title: fill(ui('archive.founders_title'), { n: e.count }),
-          body: fill(ui('archive.founders_body'), { no: String(e.founder.founder_no).padStart(2, '0'), name: e.founder.full_name, n: e.count }),
+          body: fill(ui(e.passed.length > 1 ? 'archive.founders_body_many' : 'archive.founders_body'), {
+            no: String(e.founder.founder_no).padStart(2, '0'), name: e.founder.full_name, n: e.count, list: listOf(e.passed),
+          }),
           icon,
         };
       case 'meeting_milestone':
@@ -173,9 +179,10 @@ function FoundersCard({ founders, title }: { founders: ArchiveFounder[]; title: 
             }}>+{founders.length - 4}</span>
           </div>
           <span style={{ fontSize: 'var(--text-small)', color: 'var(--color-muted)' }}>
+            {/* Lowest to highest: arrival order and number order need not agree. */}
             {fill(ui('archive.arrived_range'), {
-              a: String(founders[0].founder_no).padStart(2, '0'),
-              b: String(founders[founders.length - 1].founder_no).padStart(2, '0'),
+              a: String(Math.min(...founders.map((f) => f.founder_no))).padStart(2, '0'),
+              b: String(Math.max(...founders.map((f) => f.founder_no))).padStart(2, '0'),
             })}
           </span>
         </div>

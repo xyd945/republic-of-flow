@@ -28,8 +28,10 @@ export type ListingRef = { type: 'wanted' | 'offer'; title: Translatable };
 export type ArchiveEntry =
   | { kind: 'founding'; day: string; founder: ArchiveFounder }
   | { kind: 'founders'; day: string; founders: ArchiveFounder[] }
-  | { kind: 'founder_milestone'; day: string; count: number; founder: ArchiveFounder }
-  | { kind: 'meeting_milestone'; day: string; count: number }
+  /** `count` is the highest round number reached that day; `passed` is every
+      one reached that day, in order — a busy day can pass 10 and 20 at once. */
+  | { kind: 'founder_milestone'; day: string; count: number; passed: number[]; founder: ArchiveFounder }
+  | { kind: 'meeting_milestone'; day: string; count: number; passed: number[] }
   | { kind: 'first_meeting'; day: string; listing: ListingRef }
   | { kind: 'first_listing'; day: string; listing: ListingRef }
   | { kind: 'meeting'; day: string; listing: ListingRef }
@@ -79,21 +81,37 @@ export function dayNumber(founding: string | null, day: string): number | null {
 }
 
 /*
- * Within one day the newest-first order cannot come from timestamps alone —
- * a note has only a date — so it comes from what kind of thing it is: the
- * curator's story first, then what the day achieved, then the arrivals, and
- * the founding always last because it is where everything starts.
+ * Newest first, and within one day by the moment each thing happened. A
+ * note has only a date, so a curator's story leads its day. A day's arrivals
+ * sit where they began, so a milestone reached during the day reads above
+ * them. When two things share a moment — the tenth meeting and the
+ * "10 meetings" it earns — the milestone goes first, and the founding last,
+ * because it is where everything starts.
  */
-const RANK: Record<ArchiveEntry['kind'], number> = {
+const TIE: Record<ArchiveEntry['kind'], number> = {
   note: 0,
   founder_milestone: 1,
   meeting_milestone: 1,
-  first_meeting: 1,
-  first_listing: 1,
-  meeting: 2,
-  founders: 3,
-  founding: 4,
+  first_meeting: 2,
+  first_listing: 2,
+  meeting: 3,
+  founders: 4,
+  founding: 5,
 };
+
+/** Compared as numbers: timestamps from the database and from JS differ in shape. */
+const time = (iso: string) => Date.parse(iso);
+
+/** Round numbers reached, one entry per day: the highest, and all it passed. */
+function milestonesByDay(thresholds: number[], reached: number, dayOf: (count: number) => string) {
+  const byDay = new Map<string, number[]>();
+  for (const count of thresholds) {
+    if (count > reached) break;
+    const day = dayOf(count);
+    byDay.set(day, [...(byDay.get(day) ?? []), count]);
+  }
+  return [...byDay].map(([day, passed]) => ({ day, passed, count: passed[passed.length - 1] }));
+}
 
 export function buildArchive({
   founders, events, notes,
@@ -102,55 +120,56 @@ export function buildArchive({
   events: ArchiveEvent[];
   notes: ArchiveNote[];
 }): Archive {
-  const entries: ArchiveEntry[] = [];
+  const placed: { entry: ArchiveEntry; at: number }[] = [];
+  const put = (entry: ArchiveEntry, at: number) => placed.push({ entry, at });
 
   // ---- arrivals
-  const arrived = [...founders].sort((a, b) =>
-    a.joined_at === b.joined_at ? a.founder_no - b.founder_no : a.joined_at < b.joined_at ? -1 : 1);
+  const arrived = [...founders].sort((a, b) => time(a.joined_at) - time(b.joined_at) || a.founder_no - b.founder_no);
   const founding = arrived.length ? localDay(arrived[0].joined_at) : null;
 
   if (arrived.length) {
-    entries.push({ kind: 'founding', day: founding!, founder: arrived[0] });
+    put({ kind: 'founding', day: founding!, founder: arrived[0] }, time(arrived[0].joined_at));
     const byDay = new Map<string, ArchiveFounder[]>();
     for (const f of arrived.slice(1)) {
       const day = localDay(f.joined_at);
       byDay.set(day, [...(byDay.get(day) ?? []), f]);
     }
-    for (const [day, group] of byDay) entries.push({ kind: 'founders', day, founders: group });
-    for (const count of FOUNDER_MILESTONES) {
-      if (count > arrived.length) break;
-      const founder = arrived[count - 1];
-      entries.push({ kind: 'founder_milestone', day: localDay(founder.joined_at), count, founder });
+    for (const [day, group] of byDay) put({ kind: 'founders', day, founders: group }, time(group[0].joined_at));
+    for (const m of milestonesByDay(FOUNDER_MILESTONES, arrived.length, (n) => localDay(arrived[n - 1].joined_at))) {
+      const founder = arrived[m.count - 1];
+      put({ kind: 'founder_milestone', ...m, founder }, time(founder.joined_at));
     }
   }
 
   // ---- meetings: anonymous by construction, archive_events() carries no names
   const meetings = events
     .filter((e) => e.kind === 'meeting')
-    .sort((a, b) => (a.happened_at < b.happened_at ? -1 : a.happened_at > b.happened_at ? 1 : 0));
+    .sort((a, b) => time(a.happened_at) - time(b.happened_at));
   const ref = (e: ArchiveEvent): ListingRef => ({ type: e.listing_type, title: e.listing_title });
-  // Pushed newest first, so the stable sort below keeps a busy day in order.
-  for (let i = meetings.length - 1; i >= 0; i--) {
-    const day = localDay(meetings[i].happened_at);
-    entries.push(i === 0
-      ? { kind: 'first_meeting', day, listing: ref(meetings[i]) }
-      : { kind: 'meeting', day, listing: ref(meetings[i]) });
-  }
-  for (const count of MEETING_MILESTONES) {
-    if (count > meetings.length) break;
-    entries.push({ kind: 'meeting_milestone', day: localDay(meetings[count - 1].happened_at), count });
+  meetings.forEach((m, i) => {
+    const day = localDay(m.happened_at);
+    put(i === 0
+      ? { kind: 'first_meeting', day, listing: ref(m) }
+      : { kind: 'meeting', day, listing: ref(m) }, time(m.happened_at));
+  });
+  for (const m of milestonesByDay(MEETING_MILESTONES, meetings.length, (n) => localDay(meetings[n - 1].happened_at))) {
+    put({ kind: 'meeting_milestone', ...m }, time(meetings[m.count - 1].happened_at));
   }
 
   // ---- the Market opens
   const first = events.find((e) => e.kind === 'first_listing');
-  if (first) entries.push({ kind: 'first_listing', day: localDay(first.happened_at), listing: ref(first) });
+  if (first) put({ kind: 'first_listing', day: localDay(first.happened_at), listing: ref(first) }, time(first.happened_at));
 
-  // ---- curators' notes, newest written first within a day
-  for (const note of [...notes].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
-    entries.push({ kind: 'note', day: note.happened_on, note });
-  }
+  // ---- curators' notes: newest written first, when several share a day
+  for (const note of notes) put({ kind: 'note', day: note.happened_on, note }, time(note.created_at));
 
-  entries.sort((a, b) => (a.day === b.day ? RANK[a.kind] - RANK[b.kind] : a.day < b.day ? 1 : -1));
+  placed.sort((a, b) => {
+    if (a.entry.day !== b.entry.day) return a.entry.day < b.entry.day ? 1 : -1;
+    const an = a.entry.kind === 'note', bn = b.entry.kind === 'note';
+    if (an !== bn) return an ? -1 : 1;
+    return b.at - a.at || TIE[a.entry.kind] - TIE[b.entry.kind];
+  });
+  const entries = placed.map((p) => p.entry);
 
   // ---- chapters: one per calendar month, counted from the founding month
   const start = founding ?? entries[entries.length - 1]?.day ?? null;
