@@ -122,4 +122,22 @@ describe('buildArchive', () => {
       'first_listing Alps',
     ]);
   });
+
+  it('keeps the database\'s microseconds when two meetings share a millisecond', () => {
+    n = 0;
+    const m = (title: string, happened_at: string): ArchiveEvent => ({ ...meeting('2026-09-10', title), happened_at });
+    const a = buildArchive({
+      founders: [founder('2026-09-01')],
+      events: [
+        m('M3', '2026-09-10T12:00:00.123900+00:00'),
+        m('M2', '2026-09-10T12:00:00.1231+00:00'),
+        m('M1', '2026-09-09T12:00:00+00:00'),
+      ],
+      notes: [],
+    });
+    assert.deepEqual(
+      a.entries.filter((e) => 'listing' in e).map((e) => 'listing' in e && `${e.kind} ${e.listing.title.en}`),
+      ['meeting M3', 'meeting M2', 'first_meeting M1'],
+    );
+  });
 });

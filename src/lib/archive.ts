@@ -99,8 +99,16 @@ const TIE: Record<ArchiveEntry['kind'], number> = {
   founding: 5,
 };
 
-/** Compared as numbers: timestamps from the database and from JS differ in shape. */
-const time = (iso: string) => Date.parse(iso);
+/**
+ * Earlier first, to the microsecond. Compared as numbers, since timestamps
+ * from the database and from JS differ in shape; but a number keeps only
+ * milliseconds, so within one the database's own digits decide. Those all
+ * come from the database in one shape, and the instant up to the millisecond
+ * is the same, so comparing them as text compares what is left.
+ */
+function chrono(a: string, b: string): number {
+  return Date.parse(a) - Date.parse(b) || (a < b ? -1 : a > b ? 1 : 0);
+}
 
 /** Round numbers reached, one entry per day: the highest, and all it passed. */
 function milestonesByDay(thresholds: number[], reached: number, dayOf: (count: number) => string) {
@@ -120,55 +128,55 @@ export function buildArchive({
   events: ArchiveEvent[];
   notes: ArchiveNote[];
 }): Archive {
-  const placed: { entry: ArchiveEntry; at: number }[] = [];
-  const put = (entry: ArchiveEntry, at: number) => placed.push({ entry, at });
+  const placed: { entry: ArchiveEntry; at: string }[] = [];
+  const put = (entry: ArchiveEntry, at: string) => placed.push({ entry, at });
 
   // ---- arrivals
-  const arrived = [...founders].sort((a, b) => time(a.joined_at) - time(b.joined_at) || a.founder_no - b.founder_no);
+  const arrived = [...founders].sort((a, b) => chrono(a.joined_at, b.joined_at) || a.founder_no - b.founder_no);
   const founding = arrived.length ? localDay(arrived[0].joined_at) : null;
 
   if (arrived.length) {
-    put({ kind: 'founding', day: founding!, founder: arrived[0] }, time(arrived[0].joined_at));
+    put({ kind: 'founding', day: founding!, founder: arrived[0] }, arrived[0].joined_at);
     const byDay = new Map<string, ArchiveFounder[]>();
     for (const f of arrived.slice(1)) {
       const day = localDay(f.joined_at);
       byDay.set(day, [...(byDay.get(day) ?? []), f]);
     }
-    for (const [day, group] of byDay) put({ kind: 'founders', day, founders: group }, time(group[0].joined_at));
+    for (const [day, group] of byDay) put({ kind: 'founders', day, founders: group }, group[0].joined_at);
     for (const m of milestonesByDay(FOUNDER_MILESTONES, arrived.length, (n) => localDay(arrived[n - 1].joined_at))) {
       const founder = arrived[m.count - 1];
-      put({ kind: 'founder_milestone', ...m, founder }, time(founder.joined_at));
+      put({ kind: 'founder_milestone', ...m, founder }, founder.joined_at);
     }
   }
 
   // ---- meetings: anonymous by construction, archive_events() carries no names
   const meetings = events
     .filter((e) => e.kind === 'meeting')
-    // Within one millisecond, the database's microseconds decide (same format, so as text).
-    .sort((a, b) => time(a.happened_at) - time(b.happened_at) || (a.happened_at < b.happened_at ? -1 : a.happened_at > b.happened_at ? 1 : 0));
+    .sort((a, b) => chrono(a.happened_at, b.happened_at));
   const ref = (e: ArchiveEvent): ListingRef => ({ type: e.listing_type, title: e.listing_title });
   meetings.forEach((m, i) => {
     const day = localDay(m.happened_at);
     put(i === 0
       ? { kind: 'first_meeting', day, listing: ref(m) }
-      : { kind: 'meeting', day, listing: ref(m) }, time(m.happened_at));
+      : { kind: 'meeting', day, listing: ref(m) }, m.happened_at);
   });
   for (const m of milestonesByDay(MEETING_MILESTONES, meetings.length, (n) => localDay(meetings[n - 1].happened_at))) {
-    put({ kind: 'meeting_milestone', ...m }, time(meetings[m.count - 1].happened_at));
+    put({ kind: 'meeting_milestone', ...m }, meetings[m.count - 1].happened_at);
   }
 
   // ---- the Market opens
   const first = events.find((e) => e.kind === 'first_listing');
-  if (first) put({ kind: 'first_listing', day: localDay(first.happened_at), listing: ref(first) }, time(first.happened_at));
+  if (first) put({ kind: 'first_listing', day: localDay(first.happened_at), listing: ref(first) }, first.happened_at);
 
   // ---- curators' notes: newest written first, when several share a day
-  for (const note of notes) put({ kind: 'note', day: note.happened_on, note }, time(note.created_at));
+  for (const note of notes) put({ kind: 'note', day: note.happened_on, note }, note.created_at);
 
   placed.sort((a, b) => {
     if (a.entry.day !== b.entry.day) return a.entry.day < b.entry.day ? 1 : -1;
     const an = a.entry.kind === 'note', bn = b.entry.kind === 'note';
     if (an !== bn) return an ? -1 : 1;
-    return b.at - a.at || TIE[a.entry.kind] - TIE[b.entry.kind];
+    // The kind decides only between entries at exactly the same instant.
+    return chrono(b.at, a.at) || TIE[a.entry.kind] - TIE[b.entry.kind];
   });
   const entries = placed.map((p) => p.entry);
 
