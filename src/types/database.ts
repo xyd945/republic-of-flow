@@ -90,6 +90,7 @@ export interface ProfilesRow {
   is_featured: boolean;
   is_curator: boolean;
   founder_no: number | null;
+  joined_at: string | null;
   created_at: string;
   updated_at: string;
 }

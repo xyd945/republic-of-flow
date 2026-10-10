@@ -20,6 +20,8 @@ const TITLES: Record<string, { title: string; cn: string; back?: boolean }> = {
   '/market': { title: 'Flow Market', cn: '市场' },
   '/profile': { title: 'Your Dossier', cn: '我的档案' },
   '/admin': { title: 'Curator Desk', cn: '策展人事务台', back: true },
+  // Reached from Home, so the Home tab stays lit (see activeTab below).
+  '/archive': { title: 'The Archive', cn: '共和国档案', back: true },
 };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

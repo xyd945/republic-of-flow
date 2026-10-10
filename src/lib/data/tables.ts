@@ -7,7 +7,7 @@ import { attempt, humanise, TIMEOUT_MS } from './settling';
 
 /** The one place a request is actually issued. See ./settling for why. */
 const bounded = attempt;
-import type { HiddenWorld, Match, Profile, Translatable } from '@/types';
+import type { ArchiveEvent, ArchiveNote, HiddenWorld, Match, Profile, Translatable } from '@/types';
 
 /**
  * The rows as the database returns them, which is not quite the app types:
@@ -119,6 +119,21 @@ export function useMatchesQuery() {
   return useQuery({
     queryKey: keys.matches,
     queryFn: () => select<Match>((c, signal) => c.from('matches').select('*').order('created_at', { ascending: false }).abortSignal(signal)),
+  });
+}
+
+export function useArchiveNotesQuery() {
+  return useQuery({
+    queryKey: keys.archiveNotes,
+    queryFn: () => select<ArchiveNote>((c, signal) => c.from('archive_notes').select('*').order('happened_on', { ascending: false }).abortSignal(signal)),
+  });
+}
+
+/** Meetings and the Market's first listing, with nobody named — see 00015. */
+export function useArchiveEventsQuery() {
+  return useQuery({
+    queryKey: keys.archiveEvents,
+    queryFn: () => select<ArchiveEvent>((c, signal) => c.rpc('archive_events').abortSignal(signal)),
   });
 }
 

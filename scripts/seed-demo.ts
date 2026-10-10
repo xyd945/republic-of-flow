@@ -111,6 +111,8 @@ async function seed() {
            already taken, which is what keeps a later real signup from
            colliding with them. */
         founder_no: p.founder_no,
+        // When they arrived, as the Archive tells it (00015 would stamp now()).
+        joined_at: p.joined_at,
       }),
     });
 
