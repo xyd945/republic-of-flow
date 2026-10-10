@@ -222,6 +222,11 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
     zh: '第 {no} 号创始人 {name} 加入，共和国已有 {n} 人。',
   },
   'archive.meetings_title': { en: '{n} meetings', zh: '{n} 次见面' },
+  // A busy day can pass more than one round number; {list} is "10 and 20" / "10、20".
+  'archive.founders_body_many': {
+    en: 'Founder No. {no}, {name}, arrived — the Republic passed {list} founders in a single day.',
+    zh: '第 {no} 号创始人 {name} 加入——共和国一天之内跨过了 {list} 人。',
+  },
   'archive.meetings_body': { en: '{n} pairs of founders have now met in real life.', zh: '已经有 {n} 对创始人在线下见了面。' },
   'archive.first_meeting_title': { en: 'The first meeting', zh: '第一次见面' },
   'archive.first_meeting_body': {
