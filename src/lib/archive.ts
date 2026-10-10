@@ -144,7 +144,8 @@ export function buildArchive({
   // ---- meetings: anonymous by construction, archive_events() carries no names
   const meetings = events
     .filter((e) => e.kind === 'meeting')
-    .sort((a, b) => time(a.happened_at) - time(b.happened_at));
+    // Within one millisecond, the database's microseconds decide (same format, so as text).
+    .sort((a, b) => time(a.happened_at) - time(b.happened_at) || (a.happened_at < b.happened_at ? -1 : a.happened_at > b.happened_at ? 1 : 0));
   const ref = (e: ArchiveEvent): ListingRef => ({ type: e.listing_type, title: e.listing_title });
   meetings.forEach((m, i) => {
     const day = localDay(m.happened_at);
