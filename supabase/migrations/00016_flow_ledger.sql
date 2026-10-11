@@ -31,8 +31,9 @@
 -- transaction as the step itself, so a match and its money cannot disagree.
 --
 -- DEPLOY: run this first, then merge. The running client keeps working: no
--- listing has a price until the new client sets one, edit_listing still takes
--- the four arguments it sends, and every founder simply has 100 FLOW waiting.
+-- listing has a price until the new client sets one, edit_listing and
+-- raise_interest still take the arguments it sends, and every founder simply
+-- has 100 FLOW waiting.
 
 begin;
 
@@ -348,9 +349,15 @@ alter table notifications add constraint notifications_kind_check check (kind in
 -- Each is restated in full from 00008, so this file is the whole truth about
 -- what it does. Only the marked parts are new.
 -- ============================================
-create or replace function raise_interest(
+-- NEW: a third argument, the price the member was shown. The two-argument
+-- version is dropped so the running client's call (no price) resolves here:
+-- fine on a free listing, refused on a priced one until it reloads.
+drop function raise_interest(uuid, jsonb);
+
+create function raise_interest(
   p_listing_id uuid,
-  p_message    jsonb default null
+  p_message    jsonb default null,
+  p_price      integer default null
 )
 returns uuid
 language plpgsql
@@ -392,6 +399,14 @@ begin
     raise exception 'you have already raised your hand here' using errcode = '23505';
   end if;
 
+  -- NEW: you agree to the price you saw. If the owner changed it since, say
+  -- so instead of recording a price you never looked at.
+  if p_price is distinct from v_listing.price then
+    raise exception 'the price is now % — take another look',
+      coalesce(v_listing.price::text || ' FLOW', 'free')
+      using errcode = 'P0001';
+  end if;
+
   -- NEW: on a priced Offer you are the one who pays, so you must have it.
   -- The real check is at accept, when the FLOW goes on hold; this one only
   -- stops a request that could never be paid.
@@ -417,6 +432,9 @@ begin
   return v_id;
 end;
 $$;
+
+revoke all    on function raise_interest(uuid, jsonb, integer) from public, anon;
+grant execute on function raise_interest(uuid, jsonb, integer) to authenticated;
 
 create or replace function accept_interest(p_interest_id uuid)
 returns uuid
@@ -481,7 +499,12 @@ begin
     end if;
 
     v_account := member_account(v_payer);
-    select balance into v_balance from accounts where id = v_account for update;
+    -- Both accounts this hold touches, locked in the one order ledger_post
+    -- uses, BEFORE reading the balance. Locking the wallet alone first would
+    -- take the two locks in a different order from a payment into the same
+    -- wallet, and the two could deadlock.
+    perform 1 from accounts where id in (v_account, system_account('escrow')) order by id for update;
+    select balance into v_balance from accounts where id = v_account;
     if v_balance < v_interest.price then
       if v_payer = v_me then
         raise exception 'you need % FLOW to accept this and you have %', v_interest.price, v_balance
@@ -676,6 +699,35 @@ begin
 end;
 $$;
 
+-- Refunding is undoing the match — but only while the FLOW is still on
+-- hold. Checked under the match's lock, so a payer paying at the same moment
+-- either lands first (and this refuses) or waits until this is done.
+create or replace function curator_refund_payment(p_match_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_payment match_payments%rowtype;
+begin
+  if not is_curator() then
+    raise exception 'only a curator can refund a payment' using errcode = '42501';
+  end if;
+
+  perform 1 from matches where id = p_match_id for update;
+  if not found then
+    raise exception 'that match no longer exists' using errcode = 'P0001';
+  end if;
+  select * into v_payment from match_payments where match_id = p_match_id for update;
+  if not found or v_payment.status <> 'held' then
+    raise exception 'nothing is on hold for this match any more' using errcode = 'P0001';
+  end if;
+
+  perform dismatch(p_match_id);
+end;
+$$;
+
 -- The Treasury, and whether the books balance. Curators only.
 create or replace function ledger_audit()
 returns jsonb
@@ -708,6 +760,8 @@ $$;
 
 revoke all    on function curator_release_payment(uuid) from public, anon;
 grant execute on function curator_release_payment(uuid) to authenticated;
+revoke all    on function curator_refund_payment(uuid) from public, anon;
+grant execute on function curator_refund_payment(uuid) to authenticated;
 revoke all    on function ledger_audit() from public, anon;
 grant execute on function ledger_audit() to authenticated;
 
@@ -813,6 +867,10 @@ begin
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public' and p.proname = 'edit_listing' and p.pronargs = 4) then
     raise exception 'the four-argument edit_listing is still here.';
+  end if;
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname = 'public' and p.proname = 'raise_interest' and p.pronargs = 2) then
+    raise exception 'the two-argument raise_interest is still here.';
   end if;
 end $$;
 

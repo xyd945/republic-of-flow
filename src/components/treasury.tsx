@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useI18n } from '@/lib/i18n/context';
 import { fill } from '@/lib/i18n/translations';
 import { useAccountsQuery, useLedgerAuditQuery } from '@/lib/data/tables';
-import { useCuratorReleasePayment, useDismatch } from '@/lib/data/mutations';
+import { useCuratorRefundPayment, useCuratorReleasePayment } from '@/lib/data/mutations';
 import { Avatar, Bi, Button, ErrorNote, Panel, PixelSpinner, StatRow, StatusChip } from '@/components/pixel';
 import type { MatchWithParties, ProfileWithHiddenWorlds } from '@/types';
 
@@ -16,7 +16,8 @@ function errText(e: unknown): string {
  * The Curator Desk's Treasury (issue #57): how much FLOW exists and where it
  * is, whether the books balance, every payment still on hold, and everyone's
  * wallet. Releasing pays a hold the payer never confirmed; refunding undoes
- * the match, which gives the FLOW back (00016).
+ * the match, which gives the FLOW back — and both refuse if the hold was
+ * settled in the meantime (00016).
  */
 export function TreasuryTab({
   profiles, matches,
@@ -25,7 +26,7 @@ export function TreasuryTab({
   const audit = useLedgerAuditQuery(true);
   const accounts = useAccountsQuery();
   const release = useCuratorReleasePayment();
-  const dismatch = useDismatch();
+  const refund = useCuratorRefundPayment();
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
 
@@ -94,7 +95,7 @@ export function TreasuryTab({
                 {fill(ui('admin.release'), { name: payee })}
               </Button>
               <Button tone="secondary" size="sm" loading={busy === `${m.id}:refund`} disabled={busy !== null}
-                onClick={() => act(`${m.id}:refund`, () => dismatch.mutateAsync({ p_match_id: m.id }), ui('admin.refunded'))}>
+                onClick={() => act(`${m.id}:refund`, () => refund.mutateAsync({ p_match_id: m.id }), ui('admin.refunded'))}>
                 {fill(ui('admin.refund'), { name: payer })}
               </Button>
             </div>

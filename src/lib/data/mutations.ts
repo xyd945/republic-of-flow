@@ -53,7 +53,8 @@ function useRpc<TArgs extends Record<string, unknown>>(fn: string, invalidates: 
 
 /** Raising a hand. Creates the interest AND notifies the owner, atomically. */
 export const useRaiseInterest = () =>
-  useRpc<{ p_listing_id: string; p_message: Translatable | null }>(
+  // p_price: the price the member was shown; refused if the owner changed it since (00016).
+  useRpc<{ p_listing_id: string; p_message: Translatable | null; p_price: number | null }>(
     'raise_interest',
     [keys.interests, keys.listings, keys.notifications]
   );
@@ -118,6 +119,13 @@ export const useCuratorReleasePayment = () =>
   useRpc<{ p_match_id: string }>(
     'curator_release_payment',
     [keys.matches, keys.notifications, keys.archiveEvents, ...MONEY]
+  );
+
+/** Refunds a hold by undoing the match — refused if it was paid meanwhile. */
+export const useCuratorRefundPayment = () =>
+  useRpc<{ p_match_id: string }>(
+    'curator_refund_payment',
+    [keys.matches, keys.listings, keys.interests, keys.notifications, keys.archiveEvents, ...MONEY]
   );
 
 /** is_featured / is_active / class_name. There is deliberately no path to is_curator. */

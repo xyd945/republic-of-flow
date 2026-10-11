@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { keys } from '@/lib/data/client';
 import { useI18n } from '@/lib/i18n/context';
 import { useListings, useMatches, useWallet } from '@/lib/data/views';
 import { fill } from '@/lib/i18n/translations';
@@ -275,9 +277,8 @@ function MarketCard({
               )}
               {!isMatched && listing.interests.some((i) => i.status === 'pending' && i.price) && (
                 <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                  {wanted
-                    ? fill(ui('market.hold_hint_wanted'), { n: listing.price ?? '' })
-                    : ui('market.hold_hint_offer')}
+                  {/* No amount here: each request shows its own, the price it was raised at. */}
+                  {ui(wanted ? 'market.hold_hint_wanted' : 'market.hold_hint_offer')}
                 </div>
               )}
             </>
@@ -448,6 +449,7 @@ function InterestModal({
   const [error, setError] = useState('');
   const raise = useRaiseInterest();
   const wallet = useWallet();
+  const qc = useQueryClient();
 
   // On a priced Offer you pay; on a priced Wanted you are paid.
   const price = listing.price;
@@ -480,11 +482,17 @@ function InterestModal({
     const { error: err } = await raise.mutateAsync({
       p_listing_id: listing.id,
       p_message: msg.trim() ? { [lang]: msg.trim() } : null,
+      // What this sheet showed. If the owner has changed it since, the
+      // database refuses rather than record a price nobody looked at.
+      p_price: listing.price,
     }).then(() => ({ error: null as null | { code?: string; message: string } }))
       .catch((e) => ({ error: e as { code?: string; message: string } }));
     if (alive.current) setBusy(false);
     if (err) {
       if (alive.current) setError(err.code === '23505' ? ui('market.already_interested') : err.message);
+      // Most often the listing changed under us (a new price, or taken). Fetch
+      // it again so this sheet shows what is true now; it reads the live row.
+      qc.invalidateQueries({ queryKey: keys.listings });
       return;
     }
     // Deliberately outside the alive check: the request succeeded, so the
@@ -955,7 +963,7 @@ export default function MarketPage() {
       )}
 
       {interestFor && (
-        <InterestModal listing={interestFor} viewerProfileId={viewerProfileId} lang={lang}
+        <InterestModal listing={listings.find((l) => l.id === interestFor.id) ?? interestFor} viewerProfileId={viewerProfileId} lang={lang}
           onClose={() => setInterestFor(null)} onDone={() => {}} />
       )}
       {showPublish && (

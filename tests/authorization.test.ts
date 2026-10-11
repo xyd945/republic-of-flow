@@ -204,7 +204,7 @@ describe('anonymous access (00005)', () => {
                     'curator_suggest', 'curator_update_member', 'save_profile',
                     'raise_interest', 'mark_notifications_read', 'add_notification',
                     'save_archive_note', 'delete_archive_note', 'archive_events',
-                    'curator_release_payment', 'ledger_audit', 'ledger_post', 'grant_welcome']) {
+                    'curator_release_payment', 'curator_refund_payment', 'ledger_audit', 'ledger_post', 'grant_welcome']) {
     it(`${fn}() is not callable anonymously`, async () => {
       const r = await rpc(ANON, fn, {});
       assert.ok(r.status >= 400, `${fn} answered ${r.status} to an anonymous caller`);
@@ -977,8 +977,11 @@ describe('the FLOW wallet and ledger (00016)', () => {
     created.listings.push(row.id);
     return row.id;
   };
-  /** Raise a hand and have the owner accept; returns the match id, or the failed response. */
-  const raise = async (who: Member, listingId: string) => rpc(who.headers, 'raise_interest', { p_listing_id: listingId, p_message: null });
+  /** Raise a hand at the price the listing shows now, as the app does. */
+  const raise = async (who: Member, listingId: string) => {
+    const { price } = await one<{ price: number | null }>(`market_listings?select=price&id=eq.${listingId}`);
+    return rpc(who.headers, 'raise_interest', { p_listing_id: listingId, p_message: null, p_price: price });
+  };
   const interestOf = async (who: Member, listingId: string) =>
     one<{ id: string; status: string; price: number | null }>(`market_interests?select=id,status,price&listing_id=eq.${listingId}&profile_id=eq.${who.id}`);
   const accept = async (owner: Member, interestId: string) => rpc(owner.headers, 'accept_interest', { p_interest_id: interestId });
@@ -1150,5 +1153,44 @@ describe('the FLOW wallet and ledger (00016)', () => {
     assert.ok(r.status < 300, `${r.status} ${r.body}`);
     assert.equal(JSON.parse(r.body).balanced, true, `the ledger does not balance: ${r.body}`);
     assert.equal((await rpc(dan.headers, 'ledger_audit', {})).status, 403);
+  });
+
+  it('a hand goes up only at the price the member was shown', async () => {
+    const id = await listing(erin, 'offer', 10, 'ZZZ authz shown price');
+    const stale = await rpc(frank.headers, 'raise_interest', { p_listing_id: id, p_message: null, p_price: 5 });
+    assert.equal(stale.status, 400, `a request went up at a price that was not shown: ${stale.status}`);
+    const blind = await rpc(frank.headers, 'raise_interest', { p_listing_id: id, p_message: null });
+    assert.equal(blind.status, 400, `the old client raised a hand on a priced listing without seeing it: ${blind.status}`);
+    assert.equal((await read(`market_interests?select=id&listing_id=eq.${id}`)).length, 0);
+    assert.ok((await raise(frank, id)).status < 300, 'the right price was refused');
+  });
+
+  it('a free listing still takes the old two-argument call', async () => {
+    const id = await listing(erin, 'offer', null, 'ZZZ authz free compat');
+    const r = await rpc(frank.headers, 'raise_interest', { p_listing_id: id, p_message: null });
+    assert.ok(r.status < 300, `the running client broke on a free listing: ${r.status} ${r.body}`);
+  });
+
+  it('a curator refund refuses once the payer has paid, and undoes nothing', async () => {
+    const id = await listing(erin, 'offer', 12, 'ZZZ authz paid then refund');
+    await raise(ivan, id);
+    const match = JSON.parse((await accept(erin, (await interestOf(ivan, id)).id)).body) as string;
+    assert.ok((await rpc(ivan.headers, 'mark_match_met', { p_match_id: match })).status < 300);
+    const r = await rpc(curator.headers, 'curator_refund_payment', { p_match_id: match });
+    assert.equal(r.status, 400, `a paid match was "refunded": ${r.status}`);
+    assert.equal((await one<{ status: string }>(`matches?select=status&id=eq.${match}`)).status, 'completed');
+    assert.equal((await payment(match)).status, 'paid');
+  });
+
+  it('a curator refund on a hold gives the FLOW back and undoes the match', async () => {
+    const id = await listing(erin, 'offer', 8, 'ZZZ authz refund via desk');
+    await raise(ivan, id);
+    const before_ = await balance(ivan);
+    const match = JSON.parse((await accept(erin, (await interestOf(ivan, id)).id)).body) as string;
+    assert.equal(await balance(ivan), before_ - 8);
+    assert.equal((await rpc(dan.headers, 'curator_refund_payment', { p_match_id: match })).status, 403);
+    assert.ok((await rpc(curator.headers, 'curator_refund_payment', { p_match_id: match })).status < 300);
+    assert.equal(await balance(ivan), before_);
+    assert.equal((await one<{ status: string }>(`matches?select=status&id=eq.${match}`)).status, 'closed');
   });
 });

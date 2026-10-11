@@ -170,7 +170,8 @@ export function useLedgerLinesQuery(accountId: string | null) {
 export function useMatchPaymentsQuery() {
   return useQuery({
     queryKey: keys.matchPayments,
-    queryFn: () => select<MatchPayment>((c, signal) => c.from('match_payments').select('*').abortSignal(signal)),
+    // Newest first: past the API's row cap, it is the oldest settled ones that drop off.
+    queryFn: () => select<MatchPayment>((c, signal) => c.from('match_payments').select('*').order('held_at', { ascending: false }).abortSignal(signal)),
   });
 }
 

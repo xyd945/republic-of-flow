@@ -304,8 +304,8 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
     zh: '接受后对方的 FLOW 会先冻结，对方点“我们见过了”后才到你的钱包。',
   },
   'market.hold_hint_wanted': {
-    en: 'Accepting puts {n} FLOW from your wallet on hold. It reaches them when you tap “We met!”.',
-    zh: '接受后会先冻结你钱包里的 {n} FLOW，你点“我们见过了”后才付给对方。',
+    en: 'Accepting puts the reward from your wallet on hold. It reaches them when you tap “We met!”.',
+    zh: '接受后会先冻结你钱包里的报酬，你点“我们见过了”后才付给对方。',
   },
   'market.on_hold': { en: '{n} FLOW on hold', zh: '{n} FLOW 冻结中' },
   'market.paid_chip': { en: 'Paid · {n} FLOW', zh: '已支付 · {n} FLOW' },
