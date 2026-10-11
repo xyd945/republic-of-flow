@@ -7,7 +7,7 @@ import { attempt, humanise, TIMEOUT_MS } from './settling';
 
 /** The one place a request is actually issued. See ./settling for why. */
 const bounded = attempt;
-import type { ArchiveEvent, ArchiveNote, HiddenWorld, Match, Profile, Translatable } from '@/types';
+import type { Account, ArchiveEvent, ArchiveNote, HiddenWorld, LedgerAudit, LedgerLine, Match, MatchPayment, Profile, Translatable } from '@/types';
 
 /**
  * The rows as the database returns them, which is not quite the app types:
@@ -109,8 +109,8 @@ export function useListingsQuery() {
 export function useInterestsQuery() {
   return useQuery({
     queryKey: keys.interests,
-    queryFn: () => select<{ id: string; listing_id: string; profile_id: string; message: unknown; status: string }>(
-      (c, signal) => c.from('market_interests').select('id,listing_id,profile_id,message,status').order('created_at').abortSignal(signal)
+    queryFn: () => select<{ id: string; listing_id: string; profile_id: string; message: unknown; status: string; price: number | null }>(
+      (c, signal) => c.from('market_interests').select('id,listing_id,profile_id,message,status,price').order('created_at').abortSignal(signal)
     ),
   });
 }
@@ -134,6 +134,56 @@ export function useArchiveEventsQuery() {
   return useQuery({
     queryKey: keys.archiveEvents,
     queryFn: () => select<ArchiveEvent>((c, signal) => c.rpc('archive_events').abortSignal(signal)),
+  });
+}
+
+// ---------------------------------------------------------------- FLOW (00016)
+
+/**
+ * Wallets. RLS returns your own to a member, and every account (the
+ * Treasury and On hold included) to a curator, so callers pick by profile.
+ */
+export function useAccountsQuery() {
+  return useQuery({
+    queryKey: keys.accounts,
+    queryFn: () => select<Account>((c, signal) => c.from('accounts').select('id,kind,profile_id,balance').abortSignal(signal)),
+  });
+}
+
+/** One wallet's lines, newest first, each with the event it belongs to. */
+export function useLedgerLinesQuery(accountId: string | null) {
+  return useQuery({
+    queryKey: [...keys.ledger, accountId],
+    enabled: !!accountId,
+    // Each line belongs to exactly one transaction, so PostgREST embeds it as
+    // an object; untyped, supabase-js cannot know that and calls it an array.
+    queryFn: () => select<LedgerLine>((c, signal) => c.from('ledger_entries')
+      .select('id,amount,created_at,transaction:ledger_transactions(kind,memo,match_id)')
+      .eq('account_id', accountId!)
+      .order('id', { ascending: false })
+      .limit(100)
+      .abortSignal(signal) as unknown as PromiseLike<{ data: LedgerLine[] | null; error: { message: string } | null }>),
+  });
+}
+
+/** Paid matches: yours, or all of them for a curator. */
+export function useMatchPaymentsQuery() {
+  return useQuery({
+    queryKey: keys.matchPayments,
+    queryFn: () => select<MatchPayment>((c, signal) => c.from('match_payments').select('*').abortSignal(signal)),
+  });
+}
+
+/** The Treasury and whether the books balance. Curators only. */
+export function useLedgerAuditQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.audit,
+    enabled,
+    queryFn: () => bounded(async (signal) => {
+      const { data, error } = await createClient().rpc('ledger_audit').abortSignal(signal);
+      if (error) throw new Error(error.message);
+      return data as LedgerAudit;
+    }),
   });
 }
 

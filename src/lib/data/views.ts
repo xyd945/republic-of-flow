@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildArchive, type ArchiveFounder } from '@/lib/archive';
 import {
+  useAccountsQuery,
+  useLedgerLinesQuery,
+  useMatchPaymentsQuery,
   useArchiveEventsQuery,
   useArchiveNotesQuery,
   useHiddenWorldsQuery,
@@ -198,23 +201,26 @@ export function useMatches() {
   const { people, viewerProfileId, loading: peopleLoading, error: peopleError } = usePeople();
   const listings = useListingsQuery();
   const matches = useMatchesQuery();
+  const payments = useMatchPaymentsQuery();
 
   const rows = useMemo<MatchWithParties[]>(() => {
     const byId = new Map(people.map((p) => [p.id, p]));
     const listingById = new Map<string, MarketListing>((listings.data ?? []).map((l) => [l.id, l as MarketListing]));
+    const paymentById = new Map((payments.data ?? []).map((p) => [p.match_id, p]));
     return (matches.data ?? []).map((m) => ({
       ...m,
       initiator: byId.get(m.initiator_profile_id),
       matched: byId.get(m.matched_profile_id),
       listing: m.listing_id ? listingById.get(m.listing_id) : undefined,
+      payment: paymentById.get(m.id),
     }));
-  }, [matches.data, listings.data, people]);
+  }, [matches.data, listings.data, payments.data, people]);
 
   return {
     matches: rows,
     viewerProfileId,
-    loading: peopleLoading || listings.isPending || matches.isPending,
-    error: peopleError || firstError(listings, matches),
+    loading: peopleLoading || listings.isPending || matches.isPending || payments.isPending,
+    error: peopleError || firstError(listings, matches, payments),
   };
 }
 
@@ -267,5 +273,34 @@ export function useArchive() {
     meetingCount: (events.data ?? []).filter((e) => e.kind === 'meeting').length,
     loading: loading && !stuck,
     error: peopleError || firstError(notes, events) || (stuck ? STUCK_MESSAGE : ''),
+  };
+}
+
+/**
+ * Your FLOW wallet (00016): the balance, what is on hold from you and for
+ * you, and your ledger lines. The balance is the database's own figure,
+ * which the ledger's lines always add up to.
+ */
+export function useWallet() {
+  const { viewerProfileId, loading: peopleLoading, error: peopleError } = usePeople();
+  const accounts = useAccountsQuery();
+  const payments = useMatchPaymentsQuery();
+  const account = (accounts.data ?? []).find((a) => a.profile_id === viewerProfileId) ?? null;
+  const lines = useLedgerLinesQuery(account?.id ?? null);
+
+  const held = (payments.data ?? []).filter((p) => p.status === 'held');
+  const heldFromMe = held.filter((p) => p.payer_profile_id === viewerProfileId).reduce((n, p) => n + p.amount, 0);
+  const heldForMe = held.filter((p) => p.payee_profile_id === viewerProfileId).reduce((n, p) => n + p.amount, 0);
+
+  const loading = peopleLoading || accounts.isPending || payments.isPending || (!!account && lines.isPending);
+  const stuck = useStuck(loading);
+  return {
+    // Null until the founder number is claimed: no number, no wallet yet.
+    balance: account ? Number(account.balance) : null,
+    heldFromMe,
+    heldForMe,
+    lines: lines.data ?? [],
+    loading: loading && !stuck,
+    error: peopleError || firstError(accounts, payments, lines) || (stuck ? STUCK_MESSAGE : ''),
   };
 }

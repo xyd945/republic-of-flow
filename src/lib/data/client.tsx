@@ -19,6 +19,12 @@ export const keys = {
   matches: ['matches'] as const,
   notifications: ['notifications'] as const,
   archiveNotes: ['archive_notes'] as const,
+  // The FLOW ledger (00016). Money moves inside the market functions, so
+  // those invalidate these too.
+  accounts: ['accounts'] as const,
+  ledger: ['ledger_entries'] as const,
+  matchPayments: ['match_payments'] as const,
+  audit: ['ledger_audit'] as const,
   /** Computed from matches and listings, so writes to either refresh it. */
   archiveEvents: ['archive_events'] as const,
   session: ['session'] as const,

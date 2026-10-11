@@ -272,6 +272,70 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'archive.read_all': { en: 'Read all', zh: '全部' },
   'archive.latest': { en: 'Day {n} · {what}', zh: '第 {n} 天 · {what}' },
 
+  // FLOW (issue #57). {n} amount, {name} a founder, {balance} your FLOW, {memo} a listing title.
+  'market.price': { en: 'Price · optional', zh: '价格（可选）' },
+  'market.reward': { en: 'Reward · optional', zh: '报酬（可选）' },
+  'market.price_hint_offer': { en: 'Leave it empty for free. The person you accept pays you this.', zh: '留空即免费。你接受的人会付给你这么多。' },
+  'market.price_hint_wanted': { en: 'Leave it empty for free. You pay this to the person you accept.', zh: '留空即免费。你会付给你接受的人这么多。' },
+  'market.price_invalid': { en: 'A price is whole FLOW from 1 to 1,000, or empty for free.', zh: '价格是 1 到 1,000 之间的整数 FLOW，留空即免费。' },
+  'market.price_chip': { en: '{n} FLOW', zh: '{n} FLOW' },
+  'market.reward_chip': { en: 'Reward · {n} FLOW', zh: '报酬 · {n} FLOW' },
+  'market.interested_paid': { en: 'I’m interested · {n} FLOW', zh: '我有兴趣 · {n} FLOW' },
+  'market.help_paid': { en: 'I can help · earn {n}', zh: '我能帮忙 · 赚 {n}' },
+  'market.pay_note': {
+    en: 'This costs {n} FLOW. It goes on hold when {name} accepts, and reaches {name} when you tap “We met!”. You have {balance} FLOW.',
+    zh: '需要 {n} FLOW。{name} 接受后先冻结，你点“我们见过了”后才付给 {name}。你现在有 {balance} FLOW。',
+  },
+  'market.pay_short': {
+    en: 'This costs {n} FLOW and you have {balance}. You can earn FLOW by helping on a Wanted.',
+    zh: '需要 {n} FLOW，你只有 {balance}。帮别人完成一条寻求可以赚到 FLOW。',
+  },
+  'market.earn_note': {
+    en: '{name} pays you {n} FLOW. It goes on hold when {name} accepts you, and reaches you when {name} confirms you met.',
+    zh: '{name} 会付给你 {n} FLOW。{name} 接受你后先冻结，确认见面后到账。',
+  },
+  'market.free_note': { en: 'Free. No FLOW changes hands.', zh: '免费，不涉及 FLOW。' },
+  'market.not_enough': { en: 'Not enough FLOW', zh: 'FLOW 不够' },
+  'market.send_paid': { en: 'Raise my hand · {n} FLOW', zh: '举手 · {n} FLOW' },
+  'market.pays_you': { en: 'Pays you {n} FLOW', zh: '付给你 {n} FLOW' },
+  'market.you_pay': { en: 'You pay {n} FLOW', zh: '你付 {n} FLOW' },
+  'market.hold_hint_offer': {
+    en: 'Accepting puts their FLOW on hold. It reaches you when they tap “We met!”.',
+    zh: '接受后对方的 FLOW 会先冻结，对方点“我们见过了”后才到你的钱包。',
+  },
+  'market.hold_hint_wanted': {
+    en: 'Accepting puts {n} FLOW from your wallet on hold. It reaches them when you tap “We met!”.',
+    zh: '接受后会先冻结你钱包里的 {n} FLOW，你点“我们见过了”后才付给对方。',
+  },
+  'market.on_hold': { en: '{n} FLOW on hold', zh: '{n} FLOW 冻结中' },
+  'market.paid_chip': { en: 'Paid · {n} FLOW', zh: '已支付 · {n} FLOW' },
+  'market.we_met_pay': { en: 'We met! · pay {n} FLOW', zh: '我们见过了 · 支付 {n} FLOW' },
+  'market.pay_explain': {
+    en: 'Tap once you have met. That pays {name}. Not met after all? Ask a curator to refund you.',
+    zh: '见过面后再点，这会付款给 {name}。没见成？请策展人退款。',
+  },
+  'market.waiting_pay': {
+    en: 'Waiting for {name} to confirm you met. {n} FLOW is on hold for you.',
+    zh: '等待 {name} 确认见面。{n} FLOW 已为你冻结。',
+  },
+  'market.you_paid': { en: 'You paid {name} {n} FLOW.', zh: '你已付给 {name} {n} FLOW。' },
+  'market.paid_you': { en: '{name} paid you {n} FLOW.', zh: '{name} 已付给你 {n} FLOW。' },
+  'market.released': { en: 'Released by a curator.', zh: '由策展人放款。' },
+  'wallet.title': { en: 'Wallet', zh: '钱包' },
+  'wallet.held_from_me': { en: '{n} on hold from you', zh: '你有 {n} 冻结中' },
+  'wallet.held_for_me': { en: '{n} on hold for you', zh: '{n} 待你收款' },
+  'wallet.ledger': { en: 'Ledger', zh: '账本' },
+  'wallet.not_yet': { en: 'Your wallet opens with your founder number.', zh: '拿到创始人编号后，钱包就会开通。' },
+  'wallet.only_grows': {
+    en: 'Lines are only ever added, never changed. Your balance is the sum of them.',
+    zh: '账本只增不改，余额就是所有记录之和。',
+  },
+  'wallet.empty': { en: 'Nothing yet', zh: '还没有记录' },
+  'wallet.welcome': { en: 'Welcome to the Republic', zh: '共和国欢迎礼' },
+  'wallet.line_hold': { en: 'On hold · {memo}', zh: '冻结 · {memo}' },
+  'wallet.line_received': { en: 'Received · {memo}', zh: '收款 · {memo}' },
+  'wallet.line_refund': { en: 'Refunded · {memo}', zh: '退款 · {memo}' },
+
   // Notifications
   'notif.title': { en: 'Notifications', zh: '通知' },
   'notif.empty': { en: 'Nothing yet. The Republic will let you know.', zh: '暂无通知。有消息时会通知你。' },
@@ -289,6 +353,8 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'notif.suggested_to_you': { en: 'A curator put you forward for {name}’s {listing} — take a look', zh: '策展人把你推荐给了 {name} 的「{listing}」— 去看看' },
   'notif.match_undone': { en: 'A curator undid your match on {listing}', zh: '策展人撤销了你在「{listing}」的配对' },
   'notif.match_met': { en: '{name} marked that you met', zh: '{name} 标记了你们已见面' },
+  'notif.payment_received': { en: '{name} paid you {amount} FLOW for {listing}', zh: '{name} 为「{listing}」付给你 {amount} FLOW' },
+  'notif.payment_released': { en: 'A curator released {amount} FLOW to you for {listing}', zh: '策展人为「{listing}」向你放款 {amount} FLOW' },
   'notif.a_listing': { en: 'a listing', zh: '一个条目' },
   'notif.someone': { en: 'Someone', zh: '某位同学' },
   'market.met': { en: 'Met', zh: '已完成' },
@@ -401,6 +467,26 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'admin.invitation_sent': { en: 'Invitation sent to', zh: '邀请已发送至' },
   'admin.invitation_failed': { en: 'Invitation failed.', zh: '邀请发送失败。' },
 
+  // Curator Desk · Treasury (00016)
+  'admin.treasury': { en: 'Treasury', zh: '国库' },
+  'admin.treasury_desc': {
+    en: 'Every FLOW the Republic has issued, where it is now, and payments still waiting for a payer to confirm.',
+    zh: '共和国发行的每一个 FLOW 现在在哪里，以及还在等付款人确认的款项。',
+  },
+  'admin.issued': { en: 'Issued', zh: '已发行' },
+  'admin.in_wallets': { en: 'In wallets', zh: '钱包中' },
+  'admin.on_hold': { en: 'On hold', zh: '冻结中' },
+  'admin.balanced': { en: 'Balanced', zh: '账目平衡' },
+  'admin.balanced_line': { en: 'Issued equals what is in wallets and on hold.', zh: '发行量 = 钱包余额 + 冻结额。' },
+  'admin.unbalanced': { en: 'The ledger is out of balance. Tell the developers.', zh: '账目不平衡，请通知开发者。' },
+  'admin.no_holds': { en: 'Nothing on hold', zh: '没有冻结的款项' },
+  'admin.pays_line': { en: '{payer} pays {payee} · {n} FLOW', zh: '{payer} 付给 {payee} · {n} FLOW' },
+  'admin.release': { en: 'Release to {name}', zh: '放款给 {name}' },
+  'admin.refund': { en: 'Refund {name}', zh: '退款给 {name}' },
+  'admin.released': { en: 'Released. The match is marked met.', zh: '已放款，配对已标记为见过面。' },
+  'admin.refunded': { en: 'Refunded, and the match is undone.', zh: '已退款，配对已撤销。' },
+  'admin.wallets': { en: 'Wallets', zh: '钱包' },
+
   // Shared
   'common.sending': { en: 'Sending...', zh: '发送中…' },
   'common.unknown_member': { en: 'Unknown member', zh: '未知成员' },
@@ -412,6 +498,10 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'common.try_again': { en: 'Try again', zh: '重试' },
   'common.close': { en: 'Close', zh: '关闭' },
 };
+
+/** "{n} FLOW" → "30 FLOW". Unknown names are left as they are. */
+export const fill = (s: string, vars: Record<string, string | number>) =>
+  s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 
 export function ui(key: string, lang: Language = 'en'): string {
   const entry = UI_STRINGS[key];

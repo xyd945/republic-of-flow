@@ -28,7 +28,9 @@ function ago(iso: string, ui: (k: string) => string): string {
 function line(n: AppNotification, lang: Language, ui: (k: string) => string): string {
   const name = n.payload.actor_name?.trim() || ui('notif.someone');
   const listing = t(n.payload.listing_title, lang).trim() || ui('notif.a_listing');
-  return ui(`notif.${n.kind}`).replace('{name}', name).replace('{listing}', listing);
+  // Being paid reads differently when a curator released it for the payer.
+  const key = n.kind === 'payment_received' && n.payload.by_curator ? 'notif.payment_released' : `notif.${n.kind}`;
+  return ui(key).replace('{name}', name).replace('{listing}', listing).replace('{amount}', String(n.payload.amount ?? ''));
 }
 
 /**
@@ -41,6 +43,8 @@ function markFor(kind: AppNotification['kind']): { glyph: string; bg: string; bd
     case 'interest_accepted':
     case 'match_met':
       return { glyph: 'Y', bg: 'var(--color-sage-tint)', bd: 'var(--color-sage)', fg: '#3F5742' };
+    case 'payment_received':
+      return { glyph: '+', bg: 'var(--color-sage-tint)', bd: 'var(--color-sage)', fg: '#3F5742' };
     case 'interest_declined':
       return { glyph: 'N', bg: 'var(--color-slate-tint)', bd: 'var(--color-slate)', fg: 'var(--color-slate)' };
     case 'match_undone':

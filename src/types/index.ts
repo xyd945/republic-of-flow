@@ -54,6 +54,9 @@ export interface MarketListing {
   status: 'draft' | 'open' | 'matched' | 'closed' | 'cancelled';
   /** Up to three storage paths in listing-images; the first is the cover. */
   images: string[];
+  /** Whole FLOW, 1 to 1,000; null is free. On an Offer the taker pays it,
+      on a Wanted the poster does (00016). */
+  price: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -102,6 +105,8 @@ export interface ListingInterest {
   profile_id: string;
   message: Translatable | null;
   status: InterestStatus;
+  /** The listing's price when the hand went up; what an accept will hold. */
+  price: number | null;
   profile?: ProfileWithHiddenWorlds;
 }
 
@@ -123,6 +128,44 @@ export interface MatchWithParties extends Match {
   initiator?: ProfileWithHiddenWorlds;
   matched?: ProfileWithHiddenWorlds;
   listing?: MarketListing;
+  /** Only on a paid match, and only for its two people and curators. */
+  payment?: MatchPayment;
+}
+
+/** What a paid match owes and where that stands (00016). */
+export interface MatchPayment {
+  match_id: string;
+  payer_profile_id: string;
+  payee_profile_id: string;
+  amount: number;
+  status: 'held' | 'paid' | 'refunded';
+  held_at: string;
+  settled_at: string | null;
+  settled_by: 'payer' | 'curator' | null;
+}
+
+/** A wallet: a founder's, or for curators the Treasury and On hold too. */
+export interface Account {
+  id: string;
+  kind: 'member' | 'treasury' | 'escrow';
+  profile_id: string | null;
+  balance: number;
+}
+
+/** One line of your ledger, with the event it belongs to. */
+export interface LedgerLine {
+  id: number;
+  amount: number;
+  created_at: string;
+  transaction: { kind: 'welcome' | 'hold' | 'pay' | 'refund'; memo: string; match_id: string | null } | null;
+}
+
+/** The Curator Desk's view of the Treasury: ledger_audit(). */
+export interface LedgerAudit {
+  issued: number;
+  in_wallets: number;
+  on_hold: number;
+  balanced: boolean;
 }
 
 /** A curator's note in the Archive (00015). Plain text, as typed. */
@@ -159,7 +202,8 @@ export type NotificationKind =
   | 'suggestion_made'    // to the listing owner: someone was suggested for it
   | 'suggested_to_you'   // to the member: a curator put you forward
   | 'match_undone'
-  | 'match_met';
+  | 'match_met'
+  | 'payment_received';  // to the payee: payload carries amount and by_curator
 
 /**
  * `payload` is a snapshot taken when the event happened, not a set of joins:
@@ -177,6 +221,8 @@ export interface AppNotification {
     listing_id?: string;
     listing_title?: Translatable;
     match_id?: string;
+    amount?: number;
+    by_curator?: boolean;
   };
   read_at: string | null;
   created_at: string;

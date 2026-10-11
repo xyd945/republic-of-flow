@@ -183,11 +183,13 @@ after(async () => {
 // ---------------------------------------------------------------------------
 
 describe('anonymous access (00005)', () => {
-  const TABLES = ['profiles', 'profile_hidden_worlds', 'market_listings', 'market_interests', 'matches', 'notifications', 'archive_notes'];
+  const TABLES = ['profiles', 'profile_hidden_worlds', 'market_listings', 'market_interests', 'matches', 'notifications', 'archive_notes',
+                  'accounts', 'ledger_entries', 'ledger_transactions', 'match_payments'];
 
   for (const table of TABLES) {
     it(`${table} is refused outright, not merely empty`, async () => {
-      const r = await rest(`${table}?select=id`, { headers: ANON });
+      // select=*, not id: match_payments is keyed by match_id and has no id column.
+      const r = await rest(`${table}?select=*`, { headers: ANON });
       // Asserting on the STATUS, not on an empty array. 00005 revoked the grant
       // as well as tightening the policy; if only the grant came back, RLS would
       // still filter every row and PostgREST would answer 200 [] — which an
@@ -201,7 +203,8 @@ describe('anonymous access (00005)', () => {
   for (const fn of ['accept_interest', 'decline_interest', 'dismatch', 'mark_match_met',
                     'curator_suggest', 'curator_update_member', 'save_profile',
                     'raise_interest', 'mark_notifications_read', 'add_notification',
-                    'save_archive_note', 'delete_archive_note', 'archive_events']) {
+                    'save_archive_note', 'delete_archive_note', 'archive_events',
+                    'curator_release_payment', 'ledger_audit', 'ledger_post', 'grant_welcome']) {
     it(`${fn}() is not callable anonymously`, async () => {
       const r = await rpc(ANON, fn, {});
       assert.ok(r.status >= 400, `${fn} answered ${r.status} to an anonymous caller`);
@@ -950,5 +953,202 @@ describe('the Archive (00015)', () => {
     });
     assert.equal((await one<{ joined_at: string }>(`profiles?select=joined_at&id=eq.${carol.id}`)).joined_at, at,
       'a member rewrote their own arrival date');
+  });
+});
+
+describe('the FLOW wallet and ledger (00016)', () => {
+  // Founders who have arrived — claimed a number — and so hold 100 FLOW each.
+  let dan: Member, erin: Member, frank: Member, gina: Member, harry: Member, ivan: Member;
+
+  const claim = async (m: Member) => {
+    const r = await rpc(m.headers, 'claim_membership', {});
+    assert.ok(r.status < 300, `fixture: claim_membership failed ${r.status} ${r.body}`);
+  };
+  const balance = async (m: Member) =>
+    Number((await one<{ balance: number }>(`accounts?select=balance&profile_id=eq.${m.id}`)).balance);
+  const onHold = async () => Number((await one<{ balance: number }>('accounts?select=balance&kind=eq.escrow')).balance);
+  const payment = async (matchId: string) =>
+    (await read<{ status: string; amount: number }>(`match_payments?select=status,amount&match_id=eq.${matchId}`))[0];
+  const listing = async (owner: Member, type: 'offer' | 'wanted', price: number | null, title: string) => {
+    const row = (await (await rest('market_listings', {
+      method: 'POST', headers: { ...ADMIN, Prefer: 'return=representation' },
+      body: JSON.stringify({ creator_profile_id: owner.id, type, price, title: { en: title }, description: {}, status: 'open' }),
+    })).json())[0] as { id: string };
+    created.listings.push(row.id);
+    return row.id;
+  };
+  /** Raise a hand and have the owner accept; returns the match id, or the failed response. */
+  const raise = async (who: Member, listingId: string) => rpc(who.headers, 'raise_interest', { p_listing_id: listingId, p_message: null });
+  const interestOf = async (who: Member, listingId: string) =>
+    one<{ id: string; status: string; price: number | null }>(`market_interests?select=id,status,price&listing_id=eq.${listingId}&profile_id=eq.${who.id}`);
+  const accept = async (owner: Member, interestId: string) => rpc(owner.headers, 'accept_interest', { p_interest_id: interestId });
+
+  before(async () => {
+    [dan, erin, frank, gina, harry, ivan] = await Promise.all(
+      ['dan', 'erin', 'frank', 'gina', 'harry', 'ivan'].map((n) => makeMember(n)));
+    for (const m of [dan, erin, frank, gina, harry, ivan]) await claim(m);
+  });
+
+  it('arriving pays 100 FLOW, and only once', async () => {
+    assert.equal(await balance(dan), 100);
+    await claim(dan);
+    assert.equal(await balance(dan), 100, 'claiming again paid a second welcome');
+    assert.equal((await read(`ledger_transactions?select=id&ref=eq.welcome:${dan.id}`)).length, 1);
+  });
+
+  it("a member sees their own wallet and lines, and no one else's", async () => {
+    const mine = await read<{ profile_id: string }>('accounts?select=profile_id,balance', dan.headers);
+    assert.deepEqual(mine.map((a) => a.profile_id), [dan.id], 'a member saw accounts other than their own');
+    const lines = await read<{ account_id: string }>('ledger_entries?select=account_id', dan.headers);
+    const own = (await one<{ id: string }>(`accounts?select=id&profile_id=eq.${dan.id}`)).id;
+    assert.ok(lines.length > 0 && lines.every((l) => l.account_id === own), "a member saw someone else's ledger lines");
+  });
+
+  it('a member cannot write the ledger or move FLOW directly', async () => {
+    const own = (await one<{ id: string }>(`accounts?select=id&profile_id=eq.${dan.id}`)).id;
+    const writes = [
+      rest(`accounts?id=eq.${own}`, { method: 'PATCH', headers: dan.headers, body: JSON.stringify({ balance: 100000 }) }),
+      rest('ledger_entries', { method: 'POST', headers: dan.headers, body: JSON.stringify({ transaction_id: crypto.randomUUID(), account_id: own, amount: 500 }) }),
+      rest('match_payments', { method: 'POST', headers: dan.headers, body: JSON.stringify({}) }),
+    ];
+    for (const r of await Promise.all(writes)) assert.ok(r.status >= 400 || (await r.json()).length === 0, `a direct write was accepted: ${r.status}`);
+    // Real arguments, so a refusal means no permission, not a wrong signature.
+    const treasury = (await one<{ id: string }>('accounts?select=id&kind=eq.treasury')).id;
+    const minted = await rpc(dan.headers, 'ledger_post', {
+      p_kind: 'welcome', p_ref: `forged:${crypto.randomUUID()}`, p_match: null, p_memo: '',
+      p_from: treasury, p_to: own, p_amount: 500,
+    });
+    assert.ok(minted.status >= 400, `ledger_post was callable by a member: ${minted.status}`);
+    for (const [fn, args] of [['grant_welcome', { p_profile: dan.id }], ['member_account', { p_profile: dan.id }]] as const) {
+      const r = await rpc(dan.headers, fn, args);
+      assert.ok(r.status >= 400, `${fn} was callable by a member: ${r.status}`);
+    }
+    assert.equal(await balance(dan), 100, "a member's balance moved");
+  });
+
+  it('an Offer: held at Accept, paid at the payer\'s "We met!", never by the payee', async () => {
+    const id = await listing(erin, 'offer', 30, 'ZZZ authz pottery');
+    assert.ok((await raise(dan, id)).status < 300);
+    const req = await interestOf(dan, id);
+    assert.equal(req.price, 30, 'the request did not record the price');
+    const held = await onHold();
+    const r = await accept(erin, req.id);
+    assert.ok(r.status < 300, `${r.status} ${r.body}`);
+    const match = JSON.parse(r.body) as string;
+    assert.equal(await balance(dan), 70);
+    assert.equal(await onHold(), held + 30);
+    assert.equal((await payment(match)).status, 'held');
+
+    const byPayee = await rpc(erin.headers, 'mark_match_met', { p_match_id: match });
+    assert.equal(byPayee.status, 400, `the payee released their own payment: ${byPayee.status}`);
+    assert.equal(await balance(erin), 100);
+
+    assert.ok((await rpc(dan.headers, 'mark_match_met', { p_match_id: match })).status < 300);
+    assert.equal(await balance(dan), 70);
+    assert.equal(await balance(erin), 130);
+    assert.equal(await onHold(), held);
+    assert.equal((await payment(match)).status, 'paid');
+    const note = await read<{ payload: { amount?: number } }>(`notifications?select=payload&profile_id=eq.${erin.id}&kind=eq.payment_received`);
+    assert.equal(note.length, 1);
+    assert.equal(note[0].payload.amount, 30);
+  });
+
+  it('a Wanted: the poster pays the person they accept', async () => {
+    const id = await listing(dan, 'wanted', 20, 'ZZZ authz running partner');
+    assert.ok((await raise(erin, id)).status < 300);
+    const before_ = [await balance(dan), await balance(erin)];
+    const r = await accept(dan, (await interestOf(erin, id)).id);
+    assert.ok(r.status < 300, `${r.status} ${r.body}`);
+    assert.equal(await balance(dan), before_[0] - 20, 'the poster was not the one charged');
+    assert.ok((await rpc(dan.headers, 'mark_match_met', { p_match_id: JSON.parse(r.body) })).status < 300);
+    assert.equal(await balance(erin), before_[1] + 20);
+  });
+
+  it('a hand cannot go up on an Offer you cannot afford', async () => {
+    const id = await listing(erin, 'offer', 1000, 'ZZZ authz yacht');
+    const r = await raise(frank, id);
+    assert.equal(r.status, 400, `raised a hand on an unaffordable offer: ${r.status}`);
+    assert.equal((await read(`market_interests?select=id&listing_id=eq.${id}`)).length, 0);
+  });
+
+  it('accepting changes nothing at all when the payer can no longer pay', async () => {
+    const a = await listing(erin, 'offer', 90, 'ZZZ authz lesson A');
+    const b = await listing(erin, 'offer', 90, 'ZZZ authz lesson B');
+    await raise(gina, a);
+    await raise(gina, b);
+    assert.ok((await accept(erin, (await interestOf(gina, a)).id)).status < 300);
+    assert.equal(await balance(gina), 10);
+    const refused = await accept(erin, (await interestOf(gina, b)).id);
+    assert.equal(refused.status, 400, `accepted without the FLOW to pay: ${refused.status}`);
+    assert.equal((await interestOf(gina, b)).status, 'pending');
+    assert.equal((await one<{ status: string }>(`market_listings?select=status&id=eq.${b}`)).status, 'open');
+    assert.equal((await read(`matches?select=id&listing_id=eq.${b}`)).length, 0, 'a match was left behind');
+    assert.equal(await balance(gina), 10);
+  });
+
+  it('two accepts racing for the same FLOW: one wins, the other moves nothing', async () => {
+    const c = await listing(erin, 'offer', 60, 'ZZZ authz race C');
+    const d = await listing(curator, 'offer', 60, 'ZZZ authz race D');
+    await raise(harry, c);
+    await raise(harry, d);
+    const [rc, rd] = await Promise.all([
+      accept(erin, (await interestOf(harry, c)).id),
+      accept(curator, (await interestOf(harry, d)).id),
+    ]);
+    assert.deepEqual([rc.status < 300, rd.status < 300].filter(Boolean).length, 1, `${rc.status} ${rd.status}`);
+    assert.equal(await balance(harry), 40, 'both holds went through, or neither');
+  });
+
+  it('undoing a match gives back what was on hold', async () => {
+    const id = await listing(erin, 'offer', 25, 'ZZZ authz undo');
+    await raise(ivan, id);
+    const match = JSON.parse((await accept(erin, (await interestOf(ivan, id)).id)).body) as string;
+    assert.equal(await balance(ivan), 75);
+    assert.ok((await rpc(curator.headers, 'dismatch', { p_match_id: match })).status < 300);
+    assert.equal(await balance(ivan), 100);
+    assert.equal((await payment(match)).status, 'refunded');
+    assert.equal((await interestOf(ivan, id)).status, 'pending');
+  });
+
+  it('a curator can release a payment the payer never confirmed; a member cannot', async () => {
+    const id = await listing(frank, 'offer', 15, 'ZZZ authz release');
+    await raise(ivan, id);
+    const match = JSON.parse((await accept(frank, (await interestOf(ivan, id)).id)).body) as string;
+    const before_ = await balance(frank);
+    assert.equal((await rpc(dan.headers, 'curator_release_payment', { p_match_id: match })).status, 403);
+    assert.equal((await payment(match)).status, 'held');
+    assert.ok((await rpc(curator.headers, 'curator_release_payment', { p_match_id: match })).status < 300);
+    assert.equal(await balance(frank), before_ + 15);
+    assert.equal((await one<{ status: string }>(`matches?select=status&id=eq.${match}`)).status, 'completed');
+  });
+
+  it('a request keeps the price it was raised at, whatever the listing says later', async () => {
+    const id = await listing(erin, 'offer', 10, 'ZZZ authz repriced');
+    await raise(frank, id);
+    const edited = await rpc(erin.headers, 'edit_listing', {
+      p_listing_id: id, p_title: { en: 'ZZZ authz repriced' }, p_description: {}, p_price: 80,
+    });
+    assert.ok(edited.status < 300, `${edited.status} ${edited.body}`);
+    assert.equal((await one<{ price: number }>(`market_listings?select=price&id=eq.${id}`)).price, 80);
+    const before_ = await balance(frank);
+    const match = JSON.parse((await accept(erin, (await interestOf(frank, id)).id)).body) as string;
+    assert.equal((await payment(match)).amount, 10);
+    assert.equal(await balance(frank), before_ - 10);
+  });
+
+  it('the ledger only grows, even for the service role', async () => {
+    const line = (await read<{ id: number }>('ledger_entries?select=id&limit=1'))[0];
+    const tx = (await read<{ id: string }>('ledger_transactions?select=id&limit=1'))[0];
+    const del = await rest(`ledger_entries?id=eq.${line.id}`, { method: 'DELETE', headers: ADMIN });
+    const upd = await rest(`ledger_transactions?id=eq.${tx.id}`, { method: 'PATCH', headers: ADMIN, body: JSON.stringify({ memo: 'rewritten' }) });
+    assert.ok(del.status >= 400, `a ledger line was deleted: ${del.status}`);
+    assert.ok(upd.status >= 400, `a ledger transaction was rewritten: ${upd.status}`);
+  });
+
+  it('the books balance, and only a curator may audit them', async () => {
+    const r = await rpc(curator.headers, 'ledger_audit', {});
+    assert.ok(r.status < 300, `${r.status} ${r.body}`);
+    assert.equal(JSON.parse(r.body).balanced, true, `the ledger does not balance: ${r.body}`);
+    assert.equal((await rpc(dan.headers, 'ledger_audit', {})).status, 403);
   });
 });

@@ -32,6 +32,7 @@ export interface MarketListingsRow {
   suggested_reason: Json | null;
   /** Up to three storage paths; the first is the cover. See 00014. */
   images: string[];
+  price: number | null;
   created_at: string;
   updated_at: string;
 }
