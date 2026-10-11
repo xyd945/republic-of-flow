@@ -166,12 +166,25 @@ export function useLedgerLinesQuery(accountId: string | null) {
   });
 }
 
-/** Paid matches: yours, or all of them for a curator. */
+/**
+ * Paid matches: yours, or all of them for a curator.
+ *
+ * Two reads, merged. Every payment still on hold, however old — those are
+ * the ones money depends on — and the newest of the rest, so past the API's
+ * row cap it is only old, settled history that drops off.
+ */
 export function useMatchPaymentsQuery() {
   return useQuery({
     queryKey: keys.matchPayments,
-    // Newest first: past the API's row cap, it is the oldest settled ones that drop off.
-    queryFn: () => select<MatchPayment>((c, signal) => c.from('match_payments').select('*').order('held_at', { ascending: false }).abortSignal(signal)),
+    queryFn: async () => {
+      const [held, recent] = await Promise.all([
+        select<MatchPayment>((c, signal) => c.from('match_payments').select('*').eq('status', 'held').abortSignal(signal)),
+        select<MatchPayment>((c, signal) => c.from('match_payments').select('*').order('held_at', { ascending: false }).abortSignal(signal)),
+      ]);
+      const byMatch = new Map(recent.map((p) => [p.match_id, p]));
+      for (const p of held) byMatch.set(p.match_id, p);
+      return [...byMatch.values()];
+    },
   });
 }
 
