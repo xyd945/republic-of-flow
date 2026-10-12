@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildArchive, type ArchiveFounder } from '@/lib/archive';
-import { heldMatchesMissing, mergePayments } from '@/lib/payments';
+import { heldMatchesMissing, isActiveHold, mergePayments } from '@/lib/payments';
 import {
   useAccountsQuery,
   useMatchQuery,
+  useKnownMatchStates,
   useMatchPaymentsQuery,
   useArchiveEventsQuery,
   useArchiveNotesQuery,
@@ -204,6 +205,7 @@ export function useMatches(requestedId: string | null = null) {
   const matches = useMatchesQuery();
   const requested = useMatchQuery(requestedId);
   const payments = useMatchPaymentsQuery();
+  const statusById = useKnownMatchStates();
 
   const rows = useMemo<MatchWithParties[]>(() => {
     const byId = new Map(people.map((p) => [p.id, p]));
@@ -228,15 +230,15 @@ export function useMatches(requestedId: string | null = null) {
       return {
         ...m,
         // Settlement changes the match atomically, even if its own read has not caught up.
-        status: m.status === 'closed' || payment?.status === 'refunded' ? 'closed'
-          : m.status === 'completed' || payment?.status === 'paid' ? 'completed' : m.status,
+        status: m.status === 'closed' || statusById.get(m.id) === 'closed' || payment?.status === 'refunded' ? 'closed'
+          : m.status === 'completed' || statusById.get(m.id) === 'completed' || payment?.status === 'paid' ? 'completed' : m.status,
         initiator: byId.get(m.initiator_profile_id),
         matched: byId.get(m.matched_profile_id),
         listing: listingById.get(m.listing_id) ?? heldListing.get(m.id) ?? (m.id === detail?.id ? detail.listing ?? undefined : undefined),
         payment,
       };
     });
-  }, [matches.data, requested.data, listings.data, payments.data, people]);
+  }, [matches.data, requested.data, listings.data, payments.data, people, statusById]);
 
   return {
     matches: rows,
@@ -306,13 +308,17 @@ export function useWallet() {
   const { viewerProfileId, loading: peopleLoading, error: peopleError } = usePeople();
   const accounts = useAccountsQuery();
   const payments = useMatchPaymentsQuery();
+  const matches = useMatchesQuery();
+  const statusById = useKnownMatchStates();
   const account = (accounts.data ?? []).find((a) => a.profile_id === viewerProfileId) ?? null;
 
-  const held = (payments.data ?? []).filter((p) => p.status === 'held');
+  const held = (payments.data ?? []).filter((p) =>
+    isActiveHold(p, statusById.get(p.match_id)) && isActiveHold(p, p.match?.status),
+  );
   const heldFromMe = held.filter((p) => p.payer_profile_id === viewerProfileId).reduce((n, p) => n + p.amount, 0);
   const heldForMe = held.filter((p) => p.payee_profile_id === viewerProfileId).reduce((n, p) => n + p.amount, 0);
 
-  const loading = peopleLoading || accounts.isPending || payments.isPending;
+  const loading = peopleLoading || accounts.isPending || payments.isPending || matches.isPending;
   const stuck = useStuck(loading);
   return {
     // Null until the founder number is claimed: no number, no wallet yet.
@@ -321,7 +327,7 @@ export function useWallet() {
     heldFromMe,
     heldForMe,
     loading: loading && !stuck,
-    error: peopleError || firstError(accounts, payments) || (stuck ? STUCK_MESSAGE : ''),
-    retry: () => { accounts.refetch(); payments.refetch(); },
+    error: peopleError || firstError(accounts, payments, matches) || (stuck ? STUCK_MESSAGE : ''),
+    retry: () => { accounts.refetch(); payments.refetch(); matches.refetch(); },
   };
 }

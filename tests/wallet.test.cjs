@@ -97,3 +97,29 @@ test('wallet history pages survive new entries and failed reads; old matches are
     client.clear();
   }
 });
+
+test('wallet observes terminal states in cached list and detail reads without fetching them', () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const client = new query.QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const { useKnownMatchStates } = loadQueries({ from() { assert.fail('cached match reads must not issue requests'); } });
+  function Probe() {
+    return React.createElement('output', null, JSON.stringify([...useKnownMatchStates()].sort()));
+  }
+  const render = () => renderToStaticMarkup(React.createElement(query.QueryClientProvider, { client }, React.createElement(Probe)));
+  try {
+    client.setQueryData(['matches'], [{ id: 'current', status: 'connected' }, { id: 'closed', status: 'closed' }]);
+    client.setQueryData(['matches', 'detail', 'current'], [{ id: 'current', status: 'completed' }]);
+    client.setQueryData(['matches', 'detail', 'old'], [{ id: 'old', status: 'closed' }]);
+    client.setQueryData(['matches', 'detail', 'closed'], [{ id: 'closed', status: 'completed' }]);
+    const html = render();
+    assert.match(html, /current.*completed/);
+    assert.match(html, /old.*closed/);
+    assert.match(html, /closed.*closed/);
+    client.setQueryData(['matches', 'detail', 'current'], [{ id: 'current', status: 'closed' }]);
+    assert.match(render(), /current.*closed/);
+    assert.equal(client.isFetching(), 0);
+  } finally {
+    client.clear();
+  }
+});

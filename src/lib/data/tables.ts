@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { keys } from './client';
 import { attempt, humanise, TIMEOUT_MS } from './settling';
@@ -134,6 +134,24 @@ export function useMatchQuery(id: string | null) {
       .eq('id', id!)
       .abortSignal(signal) as unknown as PromiseLike<{ data: Detail[] | null; error: { message: string } | null }>),
   });
+}
+
+/** Include settlement learned from an old match's detail page, without refetching it. */
+export function useKnownMatchStates() {
+  const client = useQueryClient();
+  const reads = useQueries({
+    queries: client.getQueryCache().findAll({ queryKey: keys.matches })
+      .map(({ queryKey }) => ({ queryKey, enabled: false })),
+  });
+  const states = new Map<string, Match['status']>();
+  for (const read of reads) {
+    for (const match of (read.data as Match[] | undefined) ?? []) {
+      if (match.status === 'closed' || (match.status === 'completed' && states.get(match.id) !== 'closed')) {
+        states.set(match.id, match.status);
+      }
+    }
+  }
+  return states;
 }
 
 export function useArchiveNotesQuery() {

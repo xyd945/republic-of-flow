@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n/context';
 import { fill } from '@/lib/i18n/translations';
+import { isActiveHold } from '@/lib/payments';
 import { useAccountsQuery, useLedgerAuditQuery } from '@/lib/data/tables';
 import { useCuratorRefundPayment, useCuratorReleasePayment } from '@/lib/data/mutations';
 import { Avatar, Bi, Button, ErrorNote, Panel, PixelSpinner, StatRow, StatusChip } from '@/components/pixel';
@@ -31,7 +32,7 @@ export function TreasuryTab({
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; msg: string } | null>(null);
 
   const nameOf = (id: string) => profiles.find((p) => p.id === id)?.full_name ?? ui('common.unknown_member');
-  const held = matches.filter((m) => m.status !== 'closed' && m.payment?.status === 'held');
+  const held = matches.filter((m) => isActiveHold(m.payment, m.status));
   const wallets = (accounts.data ?? [])
     .filter((a) => a.kind === 'member' && a.profile_id)
     .map((a) => ({ ...a, profile: profiles.find((p) => p.id === a.profile_id) }))

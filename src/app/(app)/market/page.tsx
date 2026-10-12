@@ -7,6 +7,7 @@ import { keys } from '@/lib/data/client';
 import { useI18n } from '@/lib/i18n/context';
 import { useListings, useMatches, useWallet } from '@/lib/data/views';
 import { fill } from '@/lib/i18n/translations';
+import { isActiveHold } from '@/lib/payments';
 import {
   useAcceptInterest, useDeclineInterest, useEditListing, useMarkMatchMet,
   usePublishListing, useRaiseInterest, useWithdrawListing,
@@ -337,7 +338,7 @@ function MatchCard({
   // On a paid match "We met!" is the payment, so only the payer has the
   // button; the other side waits for it (00016).
   const pay = match.payment;
-  const held = pay?.status === 'held';
+  const held = isActiveHold(pay, match.status);
   const iPay = !!pay && pay.payer_profile_id === viewerProfileId;
   const nameOf = (id: string | undefined) =>
     (id === match.initiator_profile_id ? match.initiator : match.matched)?.full_name ?? ui('common.unknown_member');
@@ -365,7 +366,7 @@ function MatchCard({
     <Panel pad={13} tone="gold" corners>
       <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Bi en={ui(closed ? 'market.closed' : 'market.matched')} color="var(--color-navy-900)" />
-        {pay && (!held || (!done && !closed)) ? (
+        {pay && (pay.status !== 'held' || held) ? (
           <StatusChip tone={held ? 'matched' : 'open'}>
             {fill(ui(held ? 'market.on_hold' : pay.status === 'refunded' ? 'market.refunded_chip' : 'market.paid_chip'), { n: pay.amount })}
           </StatusChip>
@@ -398,14 +399,14 @@ function MatchCard({
 
       {error ? <div style={{ marginTop: 10 }}><ErrorNote>{error}</ErrorNote></div> : null}
 
-      {closed ? null : held && !done && !iPay ? (
+      {closed ? null : held && !iPay ? (
         <div style={{
           marginTop: 12, padding: '9px 10px', background: 'var(--color-gold-tint)', border: '2px solid var(--color-gold)',
           fontSize: 'var(--text-body)', color: 'var(--color-ink-2)', lineHeight: 1.5,
         }}>
           {fill(ui('market.waiting_pay'), { name: nameOf(pay!.payer_profile_id), n: pay!.amount })}
         </div>
-      ) : held && !done && iPay ? (
+      ) : held && iPay ? (
         <div style={{ marginTop: 12 }}>
           <Button tone="dark" size="lg" block onClick={markMet} loading={busy}>
             {busy ? ui('market.saving') : fill(ui('market.we_met_pay'), { n: pay!.amount })}
@@ -774,7 +775,7 @@ export default function MarketPage() {
   );
   // Payments only you can release: the "We met!" you still owe.
   const toConfirm = liveMatches.filter(
-    (m) => m.payment?.status === 'held' && m.payment.payer_profile_id === viewerProfileId,
+    (m) => isActiveHold(m.payment, m.status) && m.payment?.payer_profile_id === viewerProfileId,
   ).length;
   const awaitingReply = myListings.reduce(
     (n, l) => n + (l.status === 'matched' ? 0 : l.interests.filter((i) => i.status === 'pending').length),

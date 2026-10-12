@@ -14,14 +14,25 @@ const listing = { id: 'offer', title: { en: 'Coffee' } };
 const detail = { ...match, listing, payment: hold };
 const failedRefresh = new Error('Cached query could not refresh');
 
+function loadPaymentHelpers() {
+  const source = ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/lib/payments.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const exports = {};
+  new Function('exports', source)(exports);
+  return exports;
+}
 // Execute the real view composition with independently cached query results.
-function readMatches({ recent, requested, payments, listings = [listing], detailError = null, recentError = null }) {
+function readMatches({ recent, requested, cachedDetails = [], payments, listings = [listing], detailError = null, recentError = null, paymentsError = null, wallet = false, viewer = 'oliver' }) {
   const tables = {
     useProfilesQuery: () => ready([{ id: 'oliver', user_id: 'oliver-user' }, { id: 'tomas', user_id: 'tomas-user' }]),
-    useHiddenWorldsQuery: () => ready([]), useViewerUserIdQuery: () => ready('oliver-user'),
+    useHiddenWorldsQuery: () => ready([]), useViewerUserIdQuery: () => ready(`${viewer}-user`),
+    useAccountsQuery: () => ready([{ id: 'wallet', profile_id: viewer, balance: 85 }]),
     useListingsQuery: () => ready(listings), useMatchesQuery: () => ready(recent, recentError),
     useMatchQuery: () => ready(requested ? [requested] : [], detailError),
-    useMatchPaymentsQuery: () => ready(payments),
+    useMatchPaymentsQuery: () => ready(payments, paymentsError),
+    useKnownMatchStates: () => new Map([...(recent ?? []), ...cachedDetails, ...(requested ? [requested] : [])]
+      .filter((m) => m.status === 'completed' || m.status === 'closed').map((m) => [m.id, m.status])),
   };
   function load(relative) {
     const file = path.resolve(__dirname, '..', relative);
@@ -38,7 +49,8 @@ function readMatches({ recent, requested, payments, listings = [listing], detail
     }, exports);
     return exports;
   }
-  return load('src/lib/data/views.ts').useMatches('coffee');
+  const views = load('src/lib/data/views.ts');
+  return wallet ? views.useWallet() : views.useMatches(requested ? requested.id : null);
 }
 
 for (const [paymentStatus, matchStatus] of [['paid', 'completed'], ['refunded', 'closed']]) {
@@ -110,7 +122,7 @@ test('completed and closed cards suppress stale hold actions, while live holds r
     Panel: container, StatusChip: container, ErrorNote: container, Avatar: () => null,
     Bi: ({ en }) => React.createElement('span', null, en),
     Button: ({ children, disabled }) => React.createElement('button', { disabled }, children),
-    fill: (label) => label,
+    fill: (label) => label, isActiveHold: loadPaymentHelpers().isActiveHold,
   };
   const exports = {};
   new Function('exports', ...Object.keys(bindings), compiled)(exports, ...Object.values(bindings));
@@ -128,3 +140,97 @@ test('completed and closed cards suppress stale hold actions, while live holds r
   assert.match(render('connected', 'oliver'), /market\.we_met_pay/);
   assert.match(render('connected', 'tomas'), /market\.waiting_pay/);
 });
+
+test('Treasury actions and Market badges exclude terminal matches despite a cached hold', () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const helpers = loadPaymentHelpers();
+  const source = ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/components/treasury.tsx'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const box = ({ children }) => React.createElement('div', null, children);
+  const view = {};
+  new Function('exports', 'require', source)(view, (name) => {
+    if (name === 'react' || name === 'react/jsx-runtime') return require(name);
+    if (name === '@/lib/payments') return helpers;
+    if (name === '@/lib/i18n/context') return { useI18n: () => ({ t: (v) => v?.en ?? '', ui: (key) => key }) };
+    if (name === '@/lib/i18n/translations') return { fill: (label) => label };
+    if (name === '@/lib/data/tables') return {
+      useAccountsQuery: () => ready([]),
+      useLedgerAuditQuery: () => ready({ issued: 200, in_wallets: 200, on_hold: 0, balanced: true }),
+    };
+    if (name === '@/lib/data/mutations') return {
+      useCuratorRefundPayment: () => ({ mutateAsync: () => assert.fail('No mutation allowed') }),
+      useCuratorReleasePayment: () => ({ mutateAsync: () => assert.fail('No mutation allowed') }),
+    };
+    if (name === '@/components/pixel') return {
+      Avatar: () => null, Bi: () => null, PixelSpinner: () => null, StatRow: () => null,
+      Panel: box, StatusChip: box, ErrorNote: box,
+      Button: ({ children }) => React.createElement('button', null, children),
+    };
+    throw new Error(`Unexpected dependency: ${name}`);
+  });
+  const marketFile = path.resolve(__dirname, '../src/app/(app)/market/page.tsx');
+  const market = ts.createSourceFile(marketFile, fs.readFileSync(marketFile, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const page = market.statements.find((n) => ts.isFunctionDeclaration(n) && n.name?.text === 'MarketPage');
+  const badge = page.body.statements.find((n) => ts.isVariableStatement(n) && n.declarationList.declarations.some((d) => d.name.getText(market) === 'toConfirm'));
+  assert.ok(badge, 'exercise the actual badge filter');
+  const count = new Function('liveMatches', 'viewerProfileId', 'isActiveHold', `${badge.getText(market)}; return toConfirm;`);
+  for (const status of ['completed', 'closed', 'connected']) {
+    const matches = [{ ...match, status, listing, payment: hold }];
+    const html = renderToStaticMarkup(React.createElement(view.TreasuryTab, { profiles: [], matches }));
+    assert.equal(html.includes('admin.release'), status === 'connected');
+    assert.equal(html.includes('admin.refund'), status === 'connected');
+    assert.equal(html.includes('admin.no_holds'), status !== 'connected');
+    assert.equal(count(matches, 'oliver', helpers.isActiveHold), status === 'connected' ? 1 : 0);
+    assert.equal(count(matches, 'tomas', helpers.isActiveHold), 0, 'payee never owes confirmation');
+  }
+});
+
+for (const viewer of ['oliver', 'tomas']) {
+  test(`wallet totals for ${viewer} discard stale holds once either match read is terminal`, () => {
+    for (const status of ['completed', 'closed']) {
+      for (const source of ['recent', 'embedded']) {
+        const result = readMatches({
+          wallet: true, viewer,
+          recent: source === 'recent' ? [{ ...match, status }] : [match],
+          payments: [{ ...hold, match: { ...match, status: source === 'embedded' ? status : 'connected' } }],
+          paymentsError: failedRefresh,
+        });
+        assert.equal(result.heldFromMe, 0);
+        assert.equal(result.heldForMe, 0);
+        assert.equal(result.balance, 85);
+      }
+    }
+    const oldHold = readMatches({ wallet: true, viewer, recent: [], payments: [{ ...hold, match }] });
+    assert.equal(oldHold.heldFromMe, viewer === 'oliver' ? 15 : 0);
+    assert.equal(oldHold.heldForMe, viewer === 'tomas' ? 15 : 0);
+  });
+}
+
+for (const [paymentStatus, status] of [['paid', 'completed'], ['refunded', 'closed']]) {
+  test(`wallet totals honor ${paymentStatus} detail evidence even beyond the recent match cap`, () => {
+    for (const recent of [[match], []]) {
+      const result = readMatches({
+        wallet: true, recent, requested: { ...detail, status, payment: { ...hold, status: paymentStatus } },
+        payments: [{ ...hold, match }], recentError: failedRefresh, paymentsError: failedRefresh,
+      });
+      assert.equal(result.heldFromMe, 0);
+      assert.equal(result.heldForMe, 0);
+    }
+  });
+
+  test(`leaving a ${paymentStatus} detail cannot restore hold actions on Market or Treasury`, () => {
+    for (const recent of [[match], []]) {
+      const state = {
+        recent, cachedDetails: [{ ...detail, status, payment: { ...hold, status: paymentStatus } }],
+        payments: [{ ...hold, match: { ...match, listing } }], recentError: failedRefresh, paymentsError: failedRefresh,
+      };
+      const result = readMatches(state);
+      assert.equal(result.matches.length, 1, 'the old held match remains available');
+      assert.equal(result.matches[0].status, status, 'cached detail settlement survives navigation');
+      assert.equal(loadPaymentHelpers().isActiveHold(result.matches[0].payment, result.matches[0].status), false);
+      assert.equal(readMatches({ ...state, wallet: true }).heldFromMe, 0);
+    }
+  });
+}

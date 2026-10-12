@@ -15,6 +15,11 @@ export type HeldPayment = MatchPayment & {
   match?: (Match & { listing?: MarketListing | null }) | null;
 };
 
+/** A terminal match overrides a cached hold when only one read refreshed. */
+export function isActiveHold(payment: Pick<MatchPayment, 'status'> | null | undefined, status?: Match['status']): boolean {
+  return payment?.status === 'held' && status !== 'completed' && status !== 'closed';
+}
+
 /**
  * One row per paid match, from the two reads. Settling only goes one way
  * (held → paid or refunded), so when the reads disagree about a payment, the
