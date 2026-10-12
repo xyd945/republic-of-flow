@@ -27,6 +27,9 @@ import type { CategoryId, Translatable } from '@/types';
 
 type Invalidate = readonly (readonly string[])[];
 
+/** Everything a movement of FLOW changes (00016). */
+const MONEY: Invalidate = [keys.accounts, keys.ledger, keys.matchPayments, keys.audit];
+
 function useRpc<TArgs extends Record<string, unknown>>(fn: string, invalidates: Invalidate) {
   const qc = useQueryClient();
   return useMutation({
@@ -50,7 +53,8 @@ function useRpc<TArgs extends Record<string, unknown>>(fn: string, invalidates: 
 
 /** Raising a hand. Creates the interest AND notifies the owner, atomically. */
 export const useRaiseInterest = () =>
-  useRpc<{ p_listing_id: string; p_message: Translatable | null }>(
+  // p_price: the price the member was shown; refused if the owner changed it since (00016).
+  useRpc<{ p_listing_id: string; p_message: Translatable | null; p_price: number | null }>(
     'raise_interest',
     [keys.interests, keys.listings, keys.notifications]
   );
@@ -65,20 +69,21 @@ export const useWithdrawListing = () =>
   useRpc<{ p_listing_id: string }>('withdraw_listing', [keys.listings, keys.archiveEvents]);
 
 /**
- * Correct the title, description or photos of your own open listing.
- * p_images omitted means "leave the photos as they are".
+ * Correct the title, description, photos or price of your own open listing.
+ * p_images omitted means "leave the photos as they are"; p_price omitted
+ * leaves the price, 0 makes the listing free (00016).
  */
 export const useEditListing = () =>
-  useRpc<{ p_listing_id: string; p_title: Translatable; p_description: Translatable; p_images?: string[] }>(
+  useRpc<{ p_listing_id: string; p_title: Translatable; p_description: Translatable; p_images?: string[]; p_price?: number }>(
     'edit_listing',
     [keys.listings]
   );
 
-/** Accept: moves the interest, closes the listing, creates the match. */
+/** Accept: moves the interest, closes the listing, creates the match — and on a priced one, puts the payer's FLOW on hold. */
 export const useAcceptInterest = () =>
   useRpc<{ p_interest_id: string }>(
     'accept_interest',
-    [keys.interests, keys.listings, keys.matches, keys.notifications]
+    [keys.interests, keys.listings, keys.matches, keys.notifications, ...MONEY]
   );
 
 export const useDeclineInterest = () =>
@@ -91,7 +96,7 @@ export const useDeclineInterest = () =>
 export const useMarkMatchMet = () =>
   useRpc<{ p_match_id: string }>(
     'mark_match_met',
-    [keys.matches, keys.notifications, keys.archiveEvents]
+    [keys.matches, keys.notifications, keys.archiveEvents, ...MONEY]
   );
 
 // ---------------------------------------------------------------- curator
@@ -100,13 +105,27 @@ export const useMarkMatchMet = () =>
 export const useDismatch = () =>
   useRpc<{ p_match_id: string }>(
     'dismatch',
-    [keys.matches, keys.listings, keys.interests, keys.notifications, keys.archiveEvents]
+    [keys.matches, keys.listings, keys.interests, keys.notifications, keys.archiveEvents, ...MONEY]
   );
 
 export const useCuratorSuggest = () =>
   useRpc<{ p_listing_id: string; p_profile_id: string | null; p_reason: Translatable | null }>(
     'curator_suggest',
     [keys.listings, keys.notifications]
+  );
+
+/** Pays out a hold the payer never confirmed. Refunding is dismatch(). */
+export const useCuratorReleasePayment = () =>
+  useRpc<{ p_match_id: string }>(
+    'curator_release_payment',
+    [keys.matches, keys.notifications, keys.archiveEvents, ...MONEY]
+  );
+
+/** Refunds a hold by undoing the match — refused if it was paid meanwhile. */
+export const useCuratorRefundPayment = () =>
+  useRpc<{ p_match_id: string }>(
+    'curator_refund_payment',
+    [keys.matches, keys.listings, keys.interests, keys.notifications, keys.archiveEvents, ...MONEY]
   );
 
 /** is_featured / is_active / class_name. There is deliberately no path to is_curator. */
@@ -144,7 +163,8 @@ export const useDeleteArchiveNote = () =>
  * member who already has a number gets it back unchanged.
  */
 export const useClaimMembership = () =>
-  useRpc<Record<string, never>>('claim_membership', [keys.profiles]);
+  // Arriving also pays the 100 FLOW welcome (00016).
+  useRpc<Record<string, never>>('claim_membership', [keys.profiles, keys.accounts, keys.ledger]);
 
 // ---------------------------------------------------------------- profile
 
@@ -173,6 +193,8 @@ export function usePublishListing() {
       status: 'open';
       /** Storage paths, already uploaded; the insert policy checks they are yours. */
       images: string[];
+      /** Whole FLOW 1–1,000, or null for free. */
+      price: number | null;
     }) => bounded(async (signal) => {
       const { error } = await createClient().from('market_listings').insert(row).abortSignal(signal);
       if (error) throw error;

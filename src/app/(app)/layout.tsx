@@ -19,6 +19,7 @@ const TITLES: Record<string, { title: string; cn: string; back?: boolean }> = {
   '/people': { title: 'Founder Directory', cn: '创始人名录' },
   '/market': { title: 'Flow Market', cn: '市场' },
   '/profile': { title: 'Your Dossier', cn: '我的档案' },
+  '/wallet': { title: 'Wallet', cn: '钱包', back: true },
   '/admin': { title: 'Curator Desk', cn: '策展人事务台', back: true },
   // Reached from Home, so the Home tab stays lit (see activeTab below).
   '/archive': { title: 'The Archive', cn: '共和国档案', back: true },
@@ -70,7 +71,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   const activeTab =
     TABS.find((t) => (t.id === '/' ? pathname === '/' : pathname.startsWith(t.id)))?.id
-    ?? (pathname === '/admin' ? '/profile' : '/');
+    ?? (pathname === '/admin' || pathname === '/wallet' ? '/profile' : '/');
 
   const openNotifications = async () => {
     setShowNotifications(true);

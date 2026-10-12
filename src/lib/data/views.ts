@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildArchive, type ArchiveFounder } from '@/lib/archive';
+import { heldMatchesMissing, isActiveHold, mergePayments } from '@/lib/payments';
 import {
+  useAccountsQuery,
+  useMatchQuery,
+  useKnownMatchStates,
+  useMatchPaymentsQuery,
   useArchiveEventsQuery,
   useArchiveNotesQuery,
   useHiddenWorldsQuery,
@@ -194,27 +199,52 @@ export function useListings() {
   };
 }
 
-export function useMatches() {
+export function useMatches(requestedId: string | null = null) {
   const { people, viewerProfileId, loading: peopleLoading, error: peopleError } = usePeople();
   const listings = useListingsQuery();
   const matches = useMatchesQuery();
+  const requested = useMatchQuery(requestedId);
+  const payments = useMatchPaymentsQuery();
+  const statusById = useKnownMatchStates();
 
   const rows = useMemo<MatchWithParties[]>(() => {
     const byId = new Map(people.map((p) => [p.id, p]));
     const listingById = new Map<string, MarketListing>((listings.data ?? []).map((l) => [l.id, l as MarketListing]));
-    return (matches.data ?? []).map((m) => ({
-      ...m,
-      initiator: byId.get(m.initiator_profile_id),
-      matched: byId.get(m.matched_profile_id),
-      listing: m.listing_id ? listingById.get(m.listing_id) : undefined,
-    }));
-  }, [matches.data, listings.data, people]);
+    const detail = requested.data?.[0];
+    const paymentById = new Map(mergePayments(
+      detail?.payment ? [detail.payment] : [], payments.data ?? [],
+    ).map((p) => [p.match_id, p]));
+    // A match with FLOW still on hold stays, however old: someone has to
+    // release or refund it. Its listing came with it, for the same reason.
+    const held = heldMatchesMissing(matches.data ?? [], payments.data ?? []);
+    const all = [...(matches.data ?? []), ...held.map(({ listing: _listing, ...m }) => m)];
+    if (detail) {
+      const index = all.findIndex((m) => m.id === detail.id);
+      const recent = index >= 0 ? all.splice(index, 1)[0] : detail;
+      // A cached read cannot undo completion or closure; closed also wins over completed.
+      all.unshift(detail.status === 'closed' || (detail.status === 'completed' && recent.status !== 'closed') ? detail : recent);
+    }
+    const heldListing = new Map(held.map((m) => [m.id, m.listing ?? undefined]));
+    return all.map((m) => {
+      const payment = paymentById.get(m.id);
+      return {
+        ...m,
+        // Settlement changes the match atomically, even if its own read has not caught up.
+        status: m.status === 'closed' || statusById.get(m.id) === 'closed' || payment?.status === 'refunded' ? 'closed'
+          : m.status === 'completed' || statusById.get(m.id) === 'completed' || payment?.status === 'paid' ? 'completed' : m.status,
+        initiator: byId.get(m.initiator_profile_id),
+        matched: byId.get(m.matched_profile_id),
+        listing: listingById.get(m.listing_id) ?? heldListing.get(m.id) ?? (m.id === detail?.id ? detail.listing ?? undefined : undefined),
+        payment,
+      };
+    });
+  }, [matches.data, requested.data, listings.data, payments.data, people, statusById]);
 
   return {
     matches: rows,
     viewerProfileId,
-    loading: peopleLoading || listings.isPending || matches.isPending,
-    error: peopleError || firstError(listings, matches),
+    loading: peopleLoading || listings.isPending || matches.isPending || payments.isPending || (!!requestedId && requested.isPending),
+    error: peopleError || firstError(listings, matches, payments, requested),
   };
 }
 
@@ -267,5 +297,37 @@ export function useArchive() {
     meetingCount: (events.data ?? []).filter((e) => e.kind === 'meeting').length,
     loading: loading && !stuck,
     error: peopleError || firstError(notes, events) || (stuck ? STUCK_MESSAGE : ''),
+  };
+}
+
+/**
+ * Your FLOW wallet (00016): the balance, what is on hold from you and for
+ * you. History is fetched separately, only on the Wallet page.
+ */
+export function useWallet() {
+  const { viewerProfileId, loading: peopleLoading, error: peopleError } = usePeople();
+  const accounts = useAccountsQuery();
+  const payments = useMatchPaymentsQuery();
+  const matches = useMatchesQuery();
+  const statusById = useKnownMatchStates();
+  const account = (accounts.data ?? []).find((a) => a.profile_id === viewerProfileId) ?? null;
+
+  const held = (payments.data ?? []).filter((p) =>
+    isActiveHold(p, statusById.get(p.match_id)) && isActiveHold(p, p.match?.status),
+  );
+  const heldFromMe = held.filter((p) => p.payer_profile_id === viewerProfileId).reduce((n, p) => n + p.amount, 0);
+  const heldForMe = held.filter((p) => p.payee_profile_id === viewerProfileId).reduce((n, p) => n + p.amount, 0);
+
+  const loading = peopleLoading || accounts.isPending || payments.isPending || matches.isPending;
+  const stuck = useStuck(loading);
+  return {
+    // Null until the founder number is claimed: no number, no wallet yet.
+    balance: account ? Number(account.balance) : null,
+    accountId: account?.id ?? null,
+    heldFromMe,
+    heldForMe,
+    loading: loading && !stuck,
+    error: peopleError || firstError(accounts, payments, matches) || (stuck ? STUCK_MESSAGE : ''),
+    retry: () => { accounts.refetch(); payments.refetch(); matches.refetch(); },
   };
 }

@@ -251,7 +251,7 @@ export const SEED_PROFILES: ProfileWithHiddenWorlds[] = [
 
 export const SEED_LISTINGS: (MarketListing & { creator?: ProfileWithHiddenWorlds; interests_count?: number; suggested_profile?: ProfileWithHiddenWorlds; suggested_reason?: string })[] = [
   {
-    id: 'l1', creator_profile_id: 'p1', type: 'wanted',
+    id: 'l1', creator_profile_id: 'p1', type: 'wanted', price: 40,
     title: { en: 'Looking for a biochar co-pilot' },
     description: { en: 'I’m exploring a biochar startup in the Nordics. Need someone who knows carbon markets or soil science. Happy to share deal flow.' },
     tags: ['climate', 'biochar', 'co-founder'],
@@ -261,7 +261,7 @@ export const SEED_LISTINGS: (MarketListing & { creator?: ProfileWithHiddenWorlds
     creator: SEED_PROFILES[0], interests_count: 2,
   },
   {
-    id: 'l2', creator_profile_id: 'p3', type: 'wanted',
+    id: 'l2', creator_profile_id: 'p3', type: 'wanted', price: null,
     title: { en: 'Pro-bono legal clinic for founders' },
     description: { en: 'Planning a monthly legal-aid session for founders in the cohort. Looking for 2-3 classmates who can help run it.' },
     tags: ['legal', 'pro-bono', 'clinic'],
@@ -273,7 +273,7 @@ export const SEED_LISTINGS: (MarketListing & { creator?: ProfileWithHiddenWorlds
     suggested_reason: 'Nadia advises governments on regulation — she might bring an interesting policy lens.',
   },
   {
-    id: 'l3', creator_profile_id: 'p5', type: 'wanted',
+    id: 'l3', creator_profile_id: 'p5', type: 'wanted', price: null,
     title: { en: 'Cross-border payments study group' },
     description: { en: 'Anyone interested in a bi-weekly deep-dive into cross-border payment infrastructure? I’ll share learnings from PayBridge.' },
     tags: ['fintech', 'payments', 'study-group'],
@@ -283,7 +283,7 @@ export const SEED_LISTINGS: (MarketListing & { creator?: ProfileWithHiddenWorlds
     creator: SEED_PROFILES[4], interests_count: 0,
   },
   {
-    id: 'l4', creator_profile_id: 'p7', type: 'offer',
+    id: 'l4', creator_profile_id: 'p7', type: 'offer', price: null,
     title: { en: 'Arabic calligraphy workshop' },
     description: { en: 'I’ve been practicing for 12 years. Happy to run a 2-hour intro session for anyone curious.' },
     tags: ['calligraphy', 'arabic', 'workshop'],
@@ -293,7 +293,7 @@ export const SEED_LISTINGS: (MarketListing & { creator?: ProfileWithHiddenWorlds
     creator: SEED_PROFILES[6], interests_count: 4,
   },
   {
-    id: 'l5', creator_profile_id: 'p10', type: 'offer',
+    id: 'l5', creator_profile_id: 'p10', type: 'offer', price: 15,
     title: { en: 'Coffee cupping & roasting walkthrough' },
     description: { en: 'I roast my own beans (Brazilian single-origin). Will bring gear and walk you through the process.' },
     tags: ['coffee', 'craft', 'tasting'],
@@ -303,7 +303,7 @@ export const SEED_LISTINGS: (MarketListing & { creator?: ProfileWithHiddenWorlds
     creator: SEED_PROFILES[9], interests_count: 3,
   },
   {
-    id: 'l6', creator_profile_id: 'p6', type: 'offer',
+    id: 'l6', creator_profile_id: 'p6', type: 'offer', price: 25,
     title: { en: 'Biotech regulatory office hours' },
     description: { en: 'I’ve navigated FDA, EMA, and NHS pathways. 30-min slots for anyone hitting regulatory walls.' },
     tags: ['biotech', 'regulatory', 'mentoring'],

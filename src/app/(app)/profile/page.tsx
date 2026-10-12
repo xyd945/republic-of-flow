@@ -10,6 +10,7 @@ import { useSaveProfile } from '@/lib/data/mutations';
 import { CLASSES, DEFAULT_CLASS } from '@/lib/classes';
 import { LoadError } from '@/components/ui';
 import { Page } from '@/components/pixel/shell';
+import { WalletLink } from '@/components/wallet';
 import {
   Avatar, Bi, Button, Divider, ErrorNote, Field, Panel, PixelSpinner, SectionHeader, Sprite,
 } from '@/components/pixel';
@@ -416,6 +417,9 @@ export default function ProfilePage() {
           </div>
         </div>
       </Panel>
+
+      {/* the FLOW wallet (issue #57) */}
+      <WalletLink />
 
       {/* identity */}
       <section>

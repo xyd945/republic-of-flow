@@ -12,6 +12,7 @@ import {
   Avatar, Bi, Button, ErrorNote, Field, Panel, PixelSpinner, Ribbon, Sheet, Sprite, StatRow, StatusChip,
 } from '@/components/pixel';
 import type { MatchWithParties } from '@/types';
+import { TreasuryTab } from '@/components/treasury';
 
 /** Result of a curator action. Green for done, red for refused. */
 function Notice({ tone, children }: { tone: 'ok' | 'err'; children: React.ReactNode }) {
@@ -254,6 +255,7 @@ export default function AdminPage() {
           { id: 'people', label: ui('admin.people') },
           { id: 'listings', label: ui('admin.listings') },
           { id: 'matches', label: ui('admin.matches') },
+          { id: 'treasury', label: ui('admin.treasury') },
           { id: 'suggest', label: ui('admin.suggest') },
           { id: 'invite', label: ui('admin.invite') },
         ]}
@@ -401,6 +403,9 @@ export default function AdminPage() {
           {matchState && <Notice tone={matchState.tone}>{matchState.msg}</Notice>}
         </div>
       )}
+
+      {/* treasury (issue #57) */}
+      {tab === 'treasury' && <TreasuryTab profiles={profiles} matches={matches} />}
 
       {/* suggest */}
       {tab === 'suggest' && (
