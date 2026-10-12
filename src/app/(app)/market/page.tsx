@@ -365,7 +365,7 @@ function MatchCard({
     <Panel pad={13} tone="gold" corners>
       <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Bi en={ui(closed ? 'market.closed' : 'market.matched')} color="var(--color-navy-900)" />
-        {pay ? (
+        {pay && (!held || (!done && !closed)) ? (
           <StatusChip tone={held ? 'matched' : 'open'}>
             {fill(ui(held ? 'market.on_hold' : pay.status === 'refunded' ? 'market.refunded_chip' : 'market.paid_chip'), { n: pay.amount })}
           </StatusChip>
@@ -398,14 +398,14 @@ function MatchCard({
 
       {error ? <div style={{ marginTop: 10 }}><ErrorNote>{error}</ErrorNote></div> : null}
 
-      {closed ? null : held && !iPay ? (
+      {closed ? null : held && !done && !iPay ? (
         <div style={{
           marginTop: 12, padding: '9px 10px', background: 'var(--color-gold-tint)', border: '2px solid var(--color-gold)',
           fontSize: 'var(--text-body)', color: 'var(--color-ink-2)', lineHeight: 1.5,
         }}>
           {fill(ui('market.waiting_pay'), { name: nameOf(pay!.payer_profile_id), n: pay!.amount })}
         </div>
-      ) : held && iPay ? (
+      ) : held && !done && iPay ? (
         <div style={{ marginTop: 12 }}>
           <Button tone="dark" size="lg" block onClick={markMet} loading={busy}>
             {busy ? ui('market.saving') : fill(ui('market.we_met_pay'), { n: pay!.amount })}

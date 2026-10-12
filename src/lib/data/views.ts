@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildArchive, type ArchiveFounder } from '@/lib/archive';
-import { heldMatchesMissing } from '@/lib/payments';
+import { heldMatchesMissing, mergePayments } from '@/lib/payments';
 import {
   useAccountsQuery,
   useMatchQuery,
@@ -208,25 +208,34 @@ export function useMatches(requestedId: string | null = null) {
   const rows = useMemo<MatchWithParties[]>(() => {
     const byId = new Map(people.map((p) => [p.id, p]));
     const listingById = new Map<string, MarketListing>((listings.data ?? []).map((l) => [l.id, l as MarketListing]));
-    const paymentById = new Map((payments.data ?? []).map((p) => [p.match_id, p]));
+    const detail = requested.data?.[0];
+    const paymentById = new Map(mergePayments(
+      detail?.payment ? [detail.payment] : [], payments.data ?? [],
+    ).map((p) => [p.match_id, p]));
     // A match with FLOW still on hold stays, however old: someone has to
     // release or refund it. Its listing came with it, for the same reason.
     const held = heldMatchesMissing(matches.data ?? [], payments.data ?? []);
-    const detail = requested.data?.[0];
     const all = [...(matches.data ?? []), ...held.map(({ listing: _listing, ...m }) => m)];
     if (detail) {
       const index = all.findIndex((m) => m.id === detail.id);
-      if (index >= 0) all.splice(index, 1);
-      all.unshift(detail);
+      const recent = index >= 0 ? all.splice(index, 1)[0] : detail;
+      // A cached read cannot undo completion or closure; closed also wins over completed.
+      all.unshift(detail.status === 'closed' || (detail.status === 'completed' && recent.status !== 'closed') ? detail : recent);
     }
     const heldListing = new Map(held.map((m) => [m.id, m.listing ?? undefined]));
-    return all.map((m) => ({
-      ...m,
-      initiator: byId.get(m.initiator_profile_id),
-      matched: byId.get(m.matched_profile_id),
-      listing: m.id === detail?.id ? detail.listing ?? undefined : m.listing_id ? listingById.get(m.listing_id) ?? heldListing.get(m.id) : undefined,
-      payment: m.id === detail?.id ? detail.payment ?? undefined : paymentById.get(m.id),
-    }));
+    return all.map((m) => {
+      const payment = paymentById.get(m.id);
+      return {
+        ...m,
+        // Settlement changes the match atomically, even if its own read has not caught up.
+        status: m.status === 'closed' || payment?.status === 'refunded' ? 'closed'
+          : m.status === 'completed' || payment?.status === 'paid' ? 'completed' : m.status,
+        initiator: byId.get(m.initiator_profile_id),
+        matched: byId.get(m.matched_profile_id),
+        listing: listingById.get(m.listing_id) ?? heldListing.get(m.id) ?? (m.id === detail?.id ? detail.listing ?? undefined : undefined),
+        payment,
+      };
+    });
   }, [matches.data, requested.data, listings.data, payments.data, people]);
 
   return {
