@@ -13,9 +13,8 @@ import { Avatar, Button, Panel, Sprite, StatusChip } from '@/components/pixel';
  * latest entry says the same thing in both places.
  */
 
-/** "{n} founders" → "38 founders". Unknown names are left as they are. */
-export const fill = (s: string, vars: Record<string, string | number>) =>
-  s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
+export { fill } from '@/lib/i18n/translations';
+import { fill } from '@/lib/i18n/translations';
 
 const ICON: Record<ArchiveEntry['kind'], string> = {
   founding: 'nav-constitution',

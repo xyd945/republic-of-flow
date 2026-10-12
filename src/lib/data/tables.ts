@@ -1,13 +1,14 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { keys } from './client';
 import { attempt, humanise, TIMEOUT_MS } from './settling';
 
 /** The one place a request is actually issued. See ./settling for why. */
 const bounded = attempt;
-import type { ArchiveEvent, ArchiveNote, HiddenWorld, Match, Profile, Translatable } from '@/types';
+import { mergePayments, type HeldPayment } from '@/lib/payments';
+import type { Account, ArchiveEvent, ArchiveNote, HiddenWorld, LedgerAudit, LedgerLine, Match, MatchPayment, Profile, Translatable } from '@/types';
 
 /**
  * The rows as the database returns them, which is not quite the app types:
@@ -109,8 +110,8 @@ export function useListingsQuery() {
 export function useInterestsQuery() {
   return useQuery({
     queryKey: keys.interests,
-    queryFn: () => select<{ id: string; listing_id: string; profile_id: string; message: unknown; status: string }>(
-      (c, signal) => c.from('market_interests').select('id,listing_id,profile_id,message,status').order('created_at').abortSignal(signal)
+    queryFn: () => select<{ id: string; listing_id: string; profile_id: string; message: unknown; status: string; price: number | null }>(
+      (c, signal) => c.from('market_interests').select('id,listing_id,profile_id,message,status,price').order('created_at').abortSignal(signal)
     ),
   });
 }
@@ -120,6 +121,37 @@ export function useMatchesQuery() {
     queryKey: keys.matches,
     queryFn: () => select<Match>((c, signal) => c.from('matches').select('*').order('created_at', { ascending: false }).abortSignal(signal)),
   });
+}
+
+/** A wallet link may point beyond the recent matches and listings. RLS still applies. */
+export function useMatchQuery(id: string | null) {
+  type Detail = Match & { listing: import('@/types').MarketListing | null; payment: MatchPayment | null };
+  return useQuery({
+    queryKey: [...keys.matches, 'detail', id],
+    enabled: !!id,
+    queryFn: () => select<Detail>((c, signal) => c.from('matches')
+      .select('*, listing:market_listings(*), payment:match_payments(*)')
+      .eq('id', id!)
+      .abortSignal(signal) as unknown as PromiseLike<{ data: Detail[] | null; error: { message: string } | null }>),
+  });
+}
+
+/** Include settlement learned from an old match's detail page, without refetching it. */
+export function useKnownMatchStates() {
+  const client = useQueryClient();
+  const reads = useQueries({
+    queries: client.getQueryCache().findAll({ queryKey: keys.matches })
+      .map(({ queryKey }) => ({ queryKey, enabled: false })),
+  });
+  const states = new Map<string, Match['status']>();
+  for (const read of reads) {
+    for (const match of (read.data as Match[] | undefined) ?? []) {
+      if (match.status === 'closed' || (match.status === 'completed' && states.get(match.id) !== 'closed')) {
+        states.set(match.id, match.status);
+      }
+    }
+  }
+  return states;
 }
 
 export function useArchiveNotesQuery() {
@@ -134,6 +166,80 @@ export function useArchiveEventsQuery() {
   return useQuery({
     queryKey: keys.archiveEvents,
     queryFn: () => select<ArchiveEvent>((c, signal) => c.rpc('archive_events').abortSignal(signal)),
+  });
+}
+
+// ---------------------------------------------------------------- FLOW (00016)
+
+/**
+ * Wallets. RLS returns your own to a member, and every account (the
+ * Treasury and On hold included) to a curator, so callers pick by profile.
+ */
+export function useAccountsQuery() {
+  return useQuery({
+    queryKey: keys.accounts,
+    queryFn: () => select<Account>((c, signal) => c.from('accounts').select('id,kind,profile_id,balance').abortSignal(signal)),
+  });
+}
+
+/** One wallet's lines, newest first, each with the event it belongs to. */
+export function useLedgerLinesQuery(accountId: string | null) {
+  const pageSize = 20;
+  return useInfiniteQuery({
+    queryKey: [...keys.ledger, 'pages', accountId],
+    enabled: !!accountId,
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage: LedgerLine[]) => lastPage.length === pageSize ? lastPage[lastPage.length - 1].id : undefined,
+    // Each line belongs to exactly one transaction, so PostgREST embeds it as
+    // an object; untyped, supabase-js cannot know that and calls it an array.
+    queryFn: ({ pageParam }) => select<LedgerLine>((c, signal) => {
+      let query = c.from('ledger_entries')
+        .select('id,amount,created_at,transaction:ledger_transactions(kind,memo,match_id)')
+        .eq('account_id', accountId!)
+        .order('id', { ascending: false })
+        .limit(pageSize);
+      // An ID cursor keeps newly arriving entries from shifting older pages.
+      if (pageParam !== null) query = query.lt('id', pageParam);
+      return query.abortSignal(signal) as unknown as PromiseLike<{ data: LedgerLine[] | null; error: { message: string } | null }>;
+    }),
+  });
+}
+
+/**
+ * Paid matches: yours, or all of them for a curator.
+ *
+ * Two reads, merged. Every payment still on hold, however old — those are
+ * the ones money depends on — and the newest of the rest, so past the API's
+ * row cap it is only old, settled history that drops off.
+ */
+export function useMatchPaymentsQuery() {
+  return useQuery({
+    queryKey: keys.matchPayments,
+    queryFn: async () => {
+      const [held, recent] = await Promise.all([
+        // With its match and listing, which the newest-first reads of those
+        // tables may not reach — see lib/payments.
+        select<HeldPayment>((c, signal) => c.from('match_payments')
+          .select('*, match:matches(*, listing:market_listings(*))')
+          .eq('status', 'held')
+          .abortSignal(signal) as unknown as PromiseLike<{ data: HeldPayment[] | null; error: { message: string } | null }>),
+        select<MatchPayment>((c, signal) => c.from('match_payments').select('*').order('held_at', { ascending: false }).abortSignal(signal)),
+      ]);
+      return mergePayments(held, recent);
+    },
+  });
+}
+
+/** The Treasury and whether the books balance. Curators only. */
+export function useLedgerAuditQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.audit,
+    enabled,
+    queryFn: () => bounded(async (signal) => {
+      const { data, error } = await createClient().rpc('ledger_audit').abortSignal(signal);
+      if (error) throw new Error(error.message);
+      return data as LedgerAudit;
+    }),
   });
 }
 

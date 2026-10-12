@@ -150,6 +150,7 @@ async function seed() {
         chips: l.chips,
         capacity: l.capacity,
         status: l.status,
+        price: l.price,
         suggested_profile_id: l.suggested_profile ? idMap.get(l.suggested_profile.id) : null,
         suggested_reason: l.suggested_reason ? { en: l.suggested_reason } : null,
       }),
@@ -166,6 +167,8 @@ async function seed() {
         profile_id: idMap.get(i.profile_id),
         message: i.message,
         status: i.status,
+        // As raise_interest would have: the listing's price when the hand went up.
+        price: SEED_LISTINGS.find((l) => l.id === i.listing_id)?.price ?? null,
       }))
     ),
   });

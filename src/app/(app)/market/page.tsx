@@ -1,8 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { keys } from '@/lib/data/client';
 import { useI18n } from '@/lib/i18n/context';
-import { useListings, useMatches } from '@/lib/data/views';
+import { useListings, useMatches, useWallet } from '@/lib/data/views';
+import { fill } from '@/lib/i18n/translations';
+import { isActiveHold } from '@/lib/payments';
 import {
   useAcceptInterest, useDeclineInterest, useEditListing, useMarkMatchMet,
   usePublishListing, useRaiseInterest, useWithdrawListing,
@@ -24,6 +29,26 @@ import type { ListingWithCreator, ListingInterest, MatchWithParties, Language } 
  */
 function errText(e: unknown): string {
   return e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e);
+}
+
+/** A price field's text: null for free, whole FLOW 1–1,000, or 'invalid'. */
+function parsePrice(text: string): number | null | 'invalid' {
+  const v = text.trim();
+  if (v === '') return null;
+  if (!/^\d+$/.test(v)) return 'invalid';
+  const n = Number(v);
+  return n >= 1 && n <= 1000 ? n : 'invalid';
+}
+
+/** The gold chip that says what a listing costs or pays. */
+function PriceChip({ listing }: { listing: { type: 'wanted' | 'offer'; price: number | null } }) {
+  const { ui } = useI18n();
+  if (!listing.price) return null;
+  return (
+    <StatusChip tone="matched">
+      {fill(ui(listing.type === 'wanted' ? 'market.reward_chip' : 'market.price_chip'), { n: listing.price })}
+    </StatusChip>
+  );
 }
 
 /* ------------------------------------------------------------- segmented */
@@ -68,9 +93,10 @@ function Tabs({
 
 /** One incoming request, shown only to the listing owner. */
 function RequestRow({
-  interest, actionable, busyKey, onAccept, onReject,
+  interest, listingType, actionable, busyKey, onAccept, onReject,
 }: {
   interest: ListingInterest;
+  listingType: 'wanted' | 'offer';
   actionable: boolean;
   busyKey: string | null;
   onAccept: () => void;
@@ -96,6 +122,15 @@ function RequestRow({
         <div className="truncate" style={{ fontSize: 'var(--text-body)', color: 'var(--color-ink)' }}>
           {interest.profile?.full_name ?? '—'}
         </div>
+        {/* The price as it was when they raised their hand: what Accept holds. */}
+        {interest.price ? (
+          <div className="rof-label" style={{
+            marginTop: 4, textTransform: 'none', letterSpacing: 0,
+            color: listingType === 'offer' ? '#3E5A42' : '#7E2F24',
+          }}>
+            {fill(ui(listingType === 'offer' ? 'market.pays_you' : 'market.you_pay'), { n: interest.price })}
+          </div>
+        ) : null}
         {interest.message ? (
           <div style={{ fontSize: 'var(--text-body)', color: 'var(--color-muted)', marginTop: 3, lineHeight: 1.5 }}>
             {t(interest.message)}
@@ -174,7 +209,9 @@ function MarketCard({
     : mine === 'accepted' ? ui('market.youre_matched')
     : mine === 'declined' ? ui('market.not_selected')
     : mine === 'pending' ? ui('market.interest_sent')
-    : ui('market.interested');
+    : listing.price
+      ? fill(ui(wanted ? 'market.help_paid' : 'market.interested_paid'), { n: listing.price })
+      : ui('market.interested');
 
   return (
     <Panel pad={13} accent={wanted ? 'var(--color-red)' : 'var(--color-sage)'}>
@@ -194,6 +231,7 @@ function MarketCard({
             <StatusChip tone={isMatched ? 'matched' : 'open'}>
               {isMatched ? ui('market.status_matched') : ui('market.status_open')}
             </StatusChip>
+            <PriceChip listing={listing} />
           </div>
           <div style={{
             fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)',
@@ -229,13 +267,19 @@ function MarketCard({
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 6 }}>
                 {listing.interests.map((i) => (
-                  <RequestRow key={i.id} interest={i} actionable={!isMatched} busyKey={busyKey}
+                  <RequestRow key={i.id} interest={i} listingType={listing.type} actionable={!isMatched} busyKey={busyKey}
                     onAccept={() => onAccept(i)} onReject={() => onReject(i)} />
                 ))}
               </div>
               {!isMatched && listing.interests.some((i) => i.status === 'pending') && (
                 <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 8 }}>
                   {ui('market.pick_one')}
+                </div>
+              )}
+              {!isMatched && listing.interests.some((i) => i.status === 'pending' && i.price) && (
+                <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                  {/* No amount here: each request shows its own, the price it was raised at. */}
+                  {ui(wanted ? 'market.hold_hint_wanted' : 'market.hold_hint_offer')}
                 </div>
               )}
             </>
@@ -281,12 +325,23 @@ function MarketCard({
 
 /* ------------------------------------------------------------ match card */
 
-function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => void }) {
+function MatchCard({
+  match, viewerProfileId, onDone,
+}: { match: MatchWithParties; viewerProfileId: string | null; onDone: () => void }) {
   const { t, ui } = useI18n();
   const [busy, setBusy] = useState(false);
   const markMetMutation = useMarkMatchMet();
   const done = match.status === 'completed';
+  const closed = match.status === 'closed';
   const [error, setError] = useState('');
+
+  // On a paid match "We met!" is the payment, so only the payer has the
+  // button; the other side waits for it (00016).
+  const pay = match.payment;
+  const held = isActiveHold(pay, match.status);
+  const iPay = !!pay && pay.payer_profile_id === viewerProfileId;
+  const nameOf = (id: string | undefined) =>
+    (id === match.initiator_profile_id ? match.initiator : match.matched)?.full_name ?? ui('common.unknown_member');
 
   /**
    * Direct writes to matches are revoked: the row describes a relationship
@@ -309,7 +364,14 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
 
   return (
     <Panel pad={13} tone="gold" corners>
-      <Bi en={ui('market.matched')} zh="已配对" color="var(--color-navy-900)" />
+      <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <Bi en={ui(closed ? 'market.closed' : 'market.matched')} color="var(--color-navy-900)" />
+        {pay && (pay.status !== 'held' || held) ? (
+          <StatusChip tone={held ? 'matched' : 'open'}>
+            {fill(ui(held ? 'market.on_hold' : pay.status === 'refunded' ? 'market.refunded_chip' : 'market.paid_chip'), { n: pay.amount })}
+          </StatusChip>
+        ) : null}
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 10 }}>
         <Avatar initials={match.initiator?.initials ?? '?'} id={match.initiator_profile_id} size={36} />
         <span aria-hidden className="rof-label" style={{ color: 'var(--color-gold)', flex: 'none' }}>&lt;&gt;</span>
@@ -337,11 +399,37 @@ function MatchCard({ match, onDone }: { match: MatchWithParties; onDone: () => v
 
       {error ? <div style={{ marginTop: 10 }}><ErrorNote>{error}</ErrorNote></div> : null}
 
-      <div style={{ marginTop: 12 }}>
-        <Button tone="green" size="sm" onClick={markMet} loading={busy} disabled={done}>
-          {done ? ui('market.met') : busy ? ui('market.saving') : ui('market.we_met')}
-        </Button>
-      </div>
+      {closed ? null : held && !iPay ? (
+        <div style={{
+          marginTop: 12, padding: '9px 10px', background: 'var(--color-gold-tint)', border: '2px solid var(--color-gold)',
+          fontSize: 'var(--text-body)', color: 'var(--color-ink-2)', lineHeight: 1.5,
+        }}>
+          {fill(ui('market.waiting_pay'), { name: nameOf(pay!.payer_profile_id), n: pay!.amount })}
+        </div>
+      ) : held && iPay ? (
+        <div style={{ marginTop: 12 }}>
+          <Button tone="dark" size="lg" block onClick={markMet} loading={busy}>
+            {busy ? ui('market.saving') : fill(ui('market.we_met_pay'), { n: pay!.amount })}
+          </Button>
+          <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-muted)', marginTop: 8, lineHeight: 1.5 }}>
+            {fill(ui('market.pay_explain'), { name: nameOf(pay!.payee_profile_id) })}
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 12 }}>
+          <Button tone="green" size="sm" onClick={markMet} loading={busy} disabled={done}>
+            {done ? ui('market.met') : busy ? ui('market.saving') : ui('market.we_met')}
+          </Button>
+          {pay?.status === 'paid' ? (
+            <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-muted)', marginTop: 8 }}>
+              {iPay
+                ? fill(ui('market.you_paid'), { name: nameOf(pay.payee_profile_id), n: pay.amount })
+                : fill(ui('market.paid_you'), { name: nameOf(pay.payer_profile_id), n: pay.amount })}
+              {pay.settled_by === 'curator' ? ` ${ui('market.released')}` : ''}
+            </div>
+          ) : null}
+        </div>
+      )}
     </Panel>
   );
 }
@@ -362,6 +450,23 @@ function InterestModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const raise = useRaiseInterest();
+  const wallet = useWallet();
+  const qc = useQueryClient();
+
+  // On a priced Offer you pay; on a priced Wanted you are paid.
+  const price = listing.price;
+  const owner = listing.creator?.full_name ?? ui('common.unknown_member');
+  // Only a balance that actually loaded can say "not enough". A failed or
+  // pending read is unknown, not zero — and the database checks it anyway.
+  const known = !wallet.loading && !wallet.error && wallet.balance !== null;
+  const balance = wallet.balance ?? 0;
+  const cannotAfford = !!price && listing.type === 'offer' && known && balance < price;
+  const walletFailed = !!price && listing.type === 'offer' && !!wallet.error;
+  const note = !price ? null
+    : listing.type === 'wanted' ? fill(ui('market.earn_note'), { name: owner, n: price })
+    : cannotAfford ? fill(ui('market.pay_short'), { n: price, balance })
+    : known ? fill(ui('market.pay_note'), { n: price, name: owner, balance })
+    : fill(ui('market.pay_note_plain'), { n: price, name: owner });
 
   // Closing the modal mid-request would otherwise set state on an unmounted
   // component when the response lands.
@@ -384,11 +489,17 @@ function InterestModal({
     const { error: err } = await raise.mutateAsync({
       p_listing_id: listing.id,
       p_message: msg.trim() ? { [lang]: msg.trim() } : null,
+      // What this sheet showed. If the owner has changed it since, the
+      // database refuses rather than record a price nobody looked at.
+      p_price: listing.price,
     }).then(() => ({ error: null as null | { code?: string; message: string } }))
       .catch((e) => ({ error: e as { code?: string; message: string } }));
     if (alive.current) setBusy(false);
     if (err) {
       if (alive.current) setError(err.code === '23505' ? ui('market.already_interested') : err.message);
+      // Most often the listing changed under us (a new price, or taken). Fetch
+      // it again so this sheet shows what is true now; it reads the live row.
+      qc.invalidateQueries({ queryKey: keys.listings });
       return;
     }
     // Deliberately outside the alive check: the request succeeded, so the
@@ -402,8 +513,11 @@ function InterestModal({
     <Sheet
       title={ui('market.express_interest')} cn="表达兴趣" onClose={onClose}
       footer={
-        <Button tone="primary" size="lg" block onClick={send} loading={busy}>
-          {busy ? ui('market.sending') : ui('market.send_interest')}
+        <Button tone="primary" size="lg" block onClick={send} loading={busy} disabled={cannotAfford}>
+          {busy ? ui('market.sending')
+            : cannotAfford ? ui('market.not_enough')
+            : price && listing.type === 'offer' ? fill(ui('market.send_paid'), { n: price })
+            : ui('market.send_interest')}
         </Button>
       }
     >
@@ -412,7 +526,23 @@ function InterestModal({
         <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 3 }}>
           {listing.creator?.full_name ?? ui('common.unknown_member')}
         </div>
+        {price ? <div style={{ marginTop: 8 }}><PriceChip listing={listing} /></div> : null}
       </Panel>
+
+      {note ? (
+        <div style={{
+          padding: '10px 12px', fontSize: 'var(--text-body)', lineHeight: 1.55, color: 'var(--color-ink-2)',
+          background: cannotAfford ? 'var(--color-red-tint)' : 'var(--color-parchment)',
+          border: `2px solid ${cannotAfford ? 'var(--color-red)' : 'var(--color-brown)'}`,
+        }}>{note}</div>
+      ) : null}
+
+      {walletFailed ? (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <ErrorNote>{ui('wallet.read_failed')}</ErrorNote>
+          <Button tone="secondary" size="sm" onClick={wallet.retry}>{ui('common.try_again')}</Button>
+        </div>
+      ) : null}
 
       <label style={{ display: 'block' }}>
         <div style={{ marginBottom: 6 }}><Bi en={ui('market.message_optional')} zh="留言（可选）" color="var(--color-gold)" /></div>
@@ -440,6 +570,7 @@ function PublishModal({
   // t() falls back across languages, so the box shows exactly what the card
   // shows — never an empty field over text that is already there.
   const [title, setTitle] = useState(editing ? t(editing.title) : '');
+  const [price, setPrice] = useState(editing?.price ? String(editing.price) : '');
   const [desc, setDesc] = useState(editing ? t(editing.description) : '');
   const [slots, setSlots] = useState<PhotoSlot[]>(
     () => (editing?.images ?? []).map((path) => ({ key: path, path })),
@@ -464,6 +595,8 @@ function PublishModal({
 
   const publish = async () => {
     if (!title.trim()) { setError(ui('market.need_title')); return; }
+    const priced = parsePrice(price);
+    if (priced === 'invalid') { setError(ui('market.price_invalid')); return; }
     if (!viewerProfileId) { setError(ui('market.profile_loading')); return; }
     setBusy(true);
     setError('');
@@ -482,6 +615,8 @@ function PublishModal({
           p_title: { [lang]: title.trim() },
           p_description: { [lang]: desc.trim() },
           p_images: images,
+          // 0 clears it: edit_listing reads an omitted price as "leave it".
+          p_price: priced ?? 0,
         });
         // Photos taken off the listing are deleted only once it no longer
         // points at them.
@@ -494,6 +629,7 @@ function PublishModal({
           description: { [lang]: desc.trim() },
           status: 'open',
           images,
+          price: priced,
         });
       }
       onDone();
@@ -545,6 +681,24 @@ function PublishModal({
           placeholder={ui('market.desc_placeholder')} />
       </label>
 
+      {/* A Wanted's price is a reward the poster pays; an Offer's, what the taker pays. */}
+      <label style={{ display: 'block' }}>
+        <div style={{ marginBottom: 6 }}>
+          <Bi en={ui((editing?.type ?? type) === 'wanted' ? 'market.reward' : 'market.price')} color="var(--color-gold)" />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+          <input className="rof-input" type="text" inputMode="numeric" value={price} placeholder="—"
+            onChange={(e) => setPrice(e.target.value)} style={{ flex: 1 }} />
+          <span className="rof-label" style={{
+            display: 'grid', placeItems: 'center', padding: '0 12px', flex: 'none',
+            background: 'var(--color-navy-900)', color: 'var(--color-gold)', border: '2px solid var(--color-navy-900)', borderLeft: 'none',
+          }}>FLOW</span>
+        </div>
+        <div style={{ fontSize: 'var(--text-small)', color: 'var(--color-faint)', marginTop: 6, lineHeight: 1.5 }}>
+          {ui((editing?.type ?? type) === 'wanted' ? 'market.price_hint_wanted' : 'market.price_hint_offer')}
+        </div>
+      </label>
+
       <PhotoPicker slots={slots} onChange={setSlots} onError={setError}
         preparing={preparing} setPreparing={setPreparing} saving={busy} />
 
@@ -557,14 +711,21 @@ function PublishModal({
 
 export default function MarketPage() {
   const { t, lang, ui } = useI18n();
+  const [requestedMatchId, setRequestedMatchId] = useState<string | null>(null);
   const { listings, viewerProfileId, loading: listingsLoading, error: listingsError } = useListings();
   // Matches has its own loading and error. Ignoring them made a failed matches
   // query render the Matches tab as "no matches yet" — the exact outage-looks-
   // like-emptiness bug this refactor exists to remove, reintroduced one tab over.
-  const { matches, loading: matchesLoading, error: matchesError } = useMatches();
+  const { matches, loading: matchesLoading, error: matchesError } = useMatches(requestedMatchId);
+  const wallet = useWallet();
+  const router = useRouter();
   const loading = listingsLoading || matchesLoading;
   const loadError = listingsError || matchesError;
   const [tab, setTab] = useState('wanted');
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('match');
+    if (id) { setRequestedMatchId(id); setTab('matches'); }
+  }, []);
   const [interestFor, setInterestFor] = useState<ListingWithCreator | null>(null);
   const [showPublish, setShowPublish] = useState(false);
   const [editing, setEditing] = useState<ListingWithCreator | null>(null);
@@ -595,14 +756,14 @@ export default function MarketPage() {
 
   const wanted = listings.filter((l) => l.type === 'wanted');
   const offers = listings.filter((l) => l.type === 'offer');
-  // Closed matches are history — the curator desk shows them, members don't.
+  // Closed matches appear only when following their wallet history link.
   // Scoped to the viewer on purpose. RLS lets a curator read every match, so
   // without this the member-facing tab silently becomes a cohort-wide list —
   // with a live "We met!" on pairings the curator isn't part of. Cross-cohort
   // matches belong in the Curator Desk, which has its own Matches tab.
   const liveMatches = matches.filter(
     (m) =>
-      m.status !== 'closed' &&
+      (m.status !== 'closed' || m.id === requestedMatchId) &&
       (m.initiator_profile_id === viewerProfileId || m.matched_profile_id === viewerProfileId),
   );
 
@@ -612,6 +773,10 @@ export default function MarketPage() {
   const mySent = listings.filter(
     (l) => l.viewer_interest_status !== null && l.creator_profile_id !== viewerProfileId,
   );
+  // Payments only you can release: the "We met!" you still owe.
+  const toConfirm = liveMatches.filter(
+    (m) => isActiveHold(m.payment, m.status) && m.payment?.payer_profile_id === viewerProfileId,
+  ).length;
   const awaitingReply = myListings.reduce(
     (n, l) => n + (l.status === 'matched' ? 0 : l.interests.filter((i) => i.status === 'pending').length),
     0,
@@ -742,6 +907,26 @@ export default function MarketPage() {
             Post to the Market
           </Button>
         </div>
+        {/* What you can afford, before you browse. Tapping opens the full wallet. */}
+        {wallet.balance !== null && (
+          <button type="button" onClick={() => router.push('/wallet')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%', marginTop: 10, padding: '10px 12px',
+              background: 'var(--color-gold-tint)', border: '2px solid var(--color-gold)', cursor: 'pointer',
+              font: 'inherit', color: 'inherit', textAlign: 'left',
+            }}>
+            <Bi en={ui('wallet.title')} zh="钱包" color="#6B5223" />
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-h3)', color: 'var(--color-ink)' }}>
+              {wallet.balance} FLOW
+            </span>
+            <span style={{ flex: 1, textAlign: 'right', fontSize: 'var(--text-small)', color: 'var(--color-muted)' }}>
+              {[
+                wallet.heldFromMe ? fill(ui('wallet.held_from_me'), { n: wallet.heldFromMe }) : '',
+                wallet.heldForMe ? fill(ui('wallet.held_for_me'), { n: wallet.heldForMe }) : '',
+              ].filter(Boolean).join(' · ')}
+            </span>
+          </button>
+        )}
       </Panel>
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
@@ -751,7 +936,7 @@ export default function MarketPage() {
           { id: 'wanted', label: ui('market.wanted') },
           { id: 'offer', label: ui('market.offers') },
           { id: 'mine', label: ui('market.mine'), badge: awaitingReply || undefined },
-          { id: 'matches', label: ui('market.matches') },
+          { id: 'matches', label: ui('market.matches'), badge: toConfirm || undefined },
         ]}
         value={tab}
         onChange={setTab}
@@ -787,17 +972,26 @@ export default function MarketPage() {
       )}
 
       {tab === 'matches' && (
-        liveMatches.length === 0
-          ? <EmptyState title={ui('market.no_matches')} cn="还没有配对" />
-          : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 11 }}>
-              {liveMatches.map((m) => <MatchCard key={m.id} match={m} onDone={() => {}} />)}
-            </div>
-          )
+        <>
+          {requestedMatchId && !liveMatches.some((m) => m.id === requestedMatchId) && (
+            <EmptyState title={ui('market.match_unavailable')} />
+          )}
+          {liveMatches.length === 0
+            ? !requestedMatchId && <EmptyState title={ui('market.no_matches')} cn="还没有配对" />
+            : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 11 }}>
+                {liveMatches.map((m) => (
+                  <div key={m.id} style={m.id === requestedMatchId ? { outline: '3px solid var(--color-gold)', outlineOffset: 3 } : undefined}>
+                    <MatchCard match={m} viewerProfileId={viewerProfileId} onDone={() => {}} />
+                  </div>
+                ))}
+              </div>
+            )}
+        </>
       )}
 
       {interestFor && (
-        <InterestModal listing={interestFor} viewerProfileId={viewerProfileId} lang={lang}
+        <InterestModal listing={listings.find((l) => l.id === interestFor.id) ?? interestFor} viewerProfileId={viewerProfileId} lang={lang}
           onClose={() => setInterestFor(null)} onDone={() => {}} />
       )}
       {showPublish && (
