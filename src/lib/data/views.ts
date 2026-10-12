@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildArchive, type ArchiveFounder } from '@/lib/archive';
+import { heldMatchesMissing } from '@/lib/payments';
 import {
   useAccountsQuery,
   useLedgerLinesQuery,
@@ -207,11 +208,16 @@ export function useMatches() {
     const byId = new Map(people.map((p) => [p.id, p]));
     const listingById = new Map<string, MarketListing>((listings.data ?? []).map((l) => [l.id, l as MarketListing]));
     const paymentById = new Map((payments.data ?? []).map((p) => [p.match_id, p]));
-    return (matches.data ?? []).map((m) => ({
+    // A match with FLOW still on hold stays, however old: someone has to
+    // release or refund it. Its listing came with it, for the same reason.
+    const held = heldMatchesMissing(matches.data ?? [], payments.data ?? []);
+    const all = [...(matches.data ?? []), ...held.map(({ listing: _listing, ...m }) => m)];
+    const heldListing = new Map(held.map((m) => [m.id, m.listing ?? undefined]));
+    return all.map((m) => ({
       ...m,
       initiator: byId.get(m.initiator_profile_id),
       matched: byId.get(m.matched_profile_id),
-      listing: m.listing_id ? listingById.get(m.listing_id) : undefined,
+      listing: m.listing_id ? listingById.get(m.listing_id) ?? heldListing.get(m.id) : undefined,
       payment: paymentById.get(m.id),
     }));
   }, [matches.data, listings.data, payments.data, people]);
@@ -302,5 +308,6 @@ export function useWallet() {
     lines: lines.data ?? [],
     loading: loading && !stuck,
     error: peopleError || firstError(accounts, payments, lines) || (stuck ? STUCK_MESSAGE : ''),
+    retry: () => { accounts.refetch(); payments.refetch(); if (account) lines.refetch(); },
   };
 }

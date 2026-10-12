@@ -286,6 +286,10 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
     en: 'This costs {n} FLOW. It goes on hold when {name} accepts, and reaches {name} when you tap “We met!”. You have {balance} FLOW.',
     zh: '需要 {n} FLOW。{name} 接受后先冻结，你点“我们见过了”后才付给 {name}。你现在有 {balance} FLOW。',
   },
+  'market.pay_note_plain': {
+    en: 'This costs {n} FLOW. It goes on hold when {name} accepts, and reaches {name} when you tap “We met!”.',
+    zh: '需要 {n} FLOW。{name} 接受后先冻结，你点“我们见过了”后才付给 {name}。',
+  },
   'market.pay_short': {
     en: 'This costs {n} FLOW and you have {balance}. You can earn FLOW by helping on a Wanted.',
     zh: '需要 {n} FLOW，你只有 {balance}。帮别人完成一条寻求可以赚到 FLOW。',
@@ -322,6 +326,10 @@ export const UI_STRINGS: Record<string, Record<Language, string>> = {
   'market.paid_you': { en: '{name} paid you {n} FLOW.', zh: '{name} 已付给你 {n} FLOW。' },
   'market.released': { en: 'Released by a curator.', zh: '由策展人放款。' },
   'wallet.title': { en: 'Wallet', zh: '钱包' },
+  'wallet.read_failed': {
+    en: 'Your wallet did not load. You can still raise your hand: the Republic checks your balance itself.',
+    zh: '钱包没有加载出来。你仍然可以举手，系统会自己核对余额。',
+  },
   'wallet.held_from_me': { en: '{n} on hold from you', zh: '你有 {n} 冻结中' },
   'wallet.held_for_me': { en: '{n} on hold for you', zh: '{n} 待你收款' },
   'wallet.ledger': { en: 'Ledger', zh: '账本' },

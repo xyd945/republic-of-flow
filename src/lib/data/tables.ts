@@ -7,6 +7,7 @@ import { attempt, humanise, TIMEOUT_MS } from './settling';
 
 /** The one place a request is actually issued. See ./settling for why. */
 const bounded = attempt;
+import { mergePayments, type HeldPayment } from '@/lib/payments';
 import type { Account, ArchiveEvent, ArchiveNote, HiddenWorld, LedgerAudit, LedgerLine, Match, MatchPayment, Profile, Translatable } from '@/types';
 
 /**
@@ -178,17 +179,15 @@ export function useMatchPaymentsQuery() {
     queryKey: keys.matchPayments,
     queryFn: async () => {
       const [held, recent] = await Promise.all([
-        select<MatchPayment>((c, signal) => c.from('match_payments').select('*').eq('status', 'held').abortSignal(signal)),
+        // With its match and listing, which the newest-first reads of those
+        // tables may not reach — see lib/payments.
+        select<HeldPayment>((c, signal) => c.from('match_payments')
+          .select('*, match:matches(*, listing:market_listings(*))')
+          .eq('status', 'held')
+          .abortSignal(signal) as unknown as PromiseLike<{ data: HeldPayment[] | null; error: { message: string } | null }>),
         select<MatchPayment>((c, signal) => c.from('match_payments').select('*').order('held_at', { ascending: false }).abortSignal(signal)),
       ]);
-      const byMatch = new Map(held.map((p) => [p.match_id, p]));
-      for (const p of recent) {
-        // Settling only goes one way (held → paid or refunded), so when the
-        // two reads disagree about a payment, the one that saw it settled is
-        // the later truth.
-        if (!byMatch.has(p.match_id) || p.status !== 'held') byMatch.set(p.match_id, p);
-      }
-      return [...byMatch.values()];
+      return mergePayments(held, recent);
     },
   });
 }

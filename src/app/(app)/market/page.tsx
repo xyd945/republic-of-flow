@@ -454,12 +454,17 @@ function InterestModal({
   // On a priced Offer you pay; on a priced Wanted you are paid.
   const price = listing.price;
   const owner = listing.creator?.full_name ?? ui('common.unknown_member');
+  // Only a balance that actually loaded can say "not enough". A failed or
+  // pending read is unknown, not zero — and the database checks it anyway.
+  const known = !wallet.loading && !wallet.error && wallet.balance !== null;
   const balance = wallet.balance ?? 0;
-  const cannotAfford = !!price && listing.type === 'offer' && !wallet.loading && balance < price;
+  const cannotAfford = !!price && listing.type === 'offer' && known && balance < price;
+  const walletFailed = !!price && listing.type === 'offer' && !!wallet.error;
   const note = !price ? null
     : listing.type === 'wanted' ? fill(ui('market.earn_note'), { name: owner, n: price })
     : cannotAfford ? fill(ui('market.pay_short'), { n: price, balance })
-    : fill(ui('market.pay_note'), { n: price, name: owner, balance });
+    : known ? fill(ui('market.pay_note'), { n: price, name: owner, balance })
+    : fill(ui('market.pay_note_plain'), { n: price, name: owner });
 
   // Closing the modal mid-request would otherwise set state on an unmounted
   // component when the response lands.
@@ -528,6 +533,13 @@ function InterestModal({
           background: cannotAfford ? 'var(--color-red-tint)' : 'var(--color-parchment)',
           border: `2px solid ${cannotAfford ? 'var(--color-red)' : 'var(--color-brown)'}`,
         }}>{note}</div>
+      ) : null}
+
+      {walletFailed ? (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <ErrorNote>{ui('wallet.read_failed')}</ErrorNote>
+          <Button tone="secondary" size="sm" onClick={wallet.retry}>{ui('common.try_again')}</Button>
+        </div>
       ) : null}
 
       <label style={{ display: 'block' }}>
