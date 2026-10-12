@@ -331,6 +331,7 @@ function MatchCard({
   const [busy, setBusy] = useState(false);
   const markMetMutation = useMarkMatchMet();
   const done = match.status === 'completed';
+  const closed = match.status === 'closed';
   const [error, setError] = useState('');
 
   // On a paid match "We met!" is the payment, so only the payer has the
@@ -363,10 +364,10 @@ function MatchCard({
   return (
     <Panel pad={13} tone="gold" corners>
       <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <Bi en={ui('market.matched')} zh="已配对" color="var(--color-navy-900)" />
-        {pay && pay.status !== 'refunded' ? (
+        <Bi en={ui(closed ? 'market.closed' : 'market.matched')} color="var(--color-navy-900)" />
+        {pay ? (
           <StatusChip tone={held ? 'matched' : 'open'}>
-            {fill(ui(held ? 'market.on_hold' : 'market.paid_chip'), { n: pay.amount })}
+            {fill(ui(held ? 'market.on_hold' : pay.status === 'refunded' ? 'market.refunded_chip' : 'market.paid_chip'), { n: pay.amount })}
           </StatusChip>
         ) : null}
       </div>
@@ -397,7 +398,7 @@ function MatchCard({
 
       {error ? <div style={{ marginTop: 10 }}><ErrorNote>{error}</ErrorNote></div> : null}
 
-      {held && !iPay ? (
+      {closed ? null : held && !iPay ? (
         <div style={{
           marginTop: 12, padding: '9px 10px', background: 'var(--color-gold-tint)', border: '2px solid var(--color-gold)',
           fontSize: 'var(--text-body)', color: 'var(--color-ink-2)', lineHeight: 1.5,
@@ -709,16 +710,21 @@ function PublishModal({
 
 export default function MarketPage() {
   const { t, lang, ui } = useI18n();
+  const [requestedMatchId, setRequestedMatchId] = useState<string | null>(null);
   const { listings, viewerProfileId, loading: listingsLoading, error: listingsError } = useListings();
   // Matches has its own loading and error. Ignoring them made a failed matches
   // query render the Matches tab as "no matches yet" — the exact outage-looks-
   // like-emptiness bug this refactor exists to remove, reintroduced one tab over.
-  const { matches, loading: matchesLoading, error: matchesError } = useMatches();
+  const { matches, loading: matchesLoading, error: matchesError } = useMatches(requestedMatchId);
   const wallet = useWallet();
   const router = useRouter();
   const loading = listingsLoading || matchesLoading;
   const loadError = listingsError || matchesError;
   const [tab, setTab] = useState('wanted');
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('match');
+    if (id) { setRequestedMatchId(id); setTab('matches'); }
+  }, []);
   const [interestFor, setInterestFor] = useState<ListingWithCreator | null>(null);
   const [showPublish, setShowPublish] = useState(false);
   const [editing, setEditing] = useState<ListingWithCreator | null>(null);
@@ -749,14 +755,14 @@ export default function MarketPage() {
 
   const wanted = listings.filter((l) => l.type === 'wanted');
   const offers = listings.filter((l) => l.type === 'offer');
-  // Closed matches are history — the curator desk shows them, members don't.
+  // Closed matches appear only when following their wallet history link.
   // Scoped to the viewer on purpose. RLS lets a curator read every match, so
   // without this the member-facing tab silently becomes a cohort-wide list —
   // with a live "We met!" on pairings the curator isn't part of. Cross-cohort
   // matches belong in the Curator Desk, which has its own Matches tab.
   const liveMatches = matches.filter(
     (m) =>
-      m.status !== 'closed' &&
+      (m.status !== 'closed' || m.id === requestedMatchId) &&
       (m.initiator_profile_id === viewerProfileId || m.matched_profile_id === viewerProfileId),
   );
 
@@ -902,7 +908,7 @@ export default function MarketPage() {
         </div>
         {/* What you can afford, before you browse. Tapping opens the full wallet. */}
         {wallet.balance !== null && (
-          <button type="button" onClick={() => router.push('/profile')}
+          <button type="button" onClick={() => router.push('/wallet')}
             style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%', marginTop: 10, padding: '10px 12px',
               background: 'var(--color-gold-tint)', border: '2px solid var(--color-gold)', cursor: 'pointer',
@@ -965,13 +971,22 @@ export default function MarketPage() {
       )}
 
       {tab === 'matches' && (
-        liveMatches.length === 0
-          ? <EmptyState title={ui('market.no_matches')} cn="还没有配对" />
-          : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 11 }}>
-              {liveMatches.map((m) => <MatchCard key={m.id} match={m} viewerProfileId={viewerProfileId} onDone={() => {}} />)}
-            </div>
-          )
+        <>
+          {requestedMatchId && !liveMatches.some((m) => m.id === requestedMatchId) && (
+            <EmptyState title={ui('market.match_unavailable')} />
+          )}
+          {liveMatches.length === 0
+            ? !requestedMatchId && <EmptyState title={ui('market.no_matches')} cn="还没有配对" />
+            : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 11 }}>
+                {liveMatches.map((m) => (
+                  <div key={m.id} style={m.id === requestedMatchId ? { outline: '3px solid var(--color-gold)', outlineOffset: 3 } : undefined}>
+                    <MatchCard match={m} viewerProfileId={viewerProfileId} onDone={() => {}} />
+                  </div>
+                ))}
+              </div>
+            )}
+        </>
       )}
 
       {interestFor && (

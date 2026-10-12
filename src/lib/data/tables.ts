@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { keys } from './client';
 import { attempt, humanise, TIMEOUT_MS } from './settling';
@@ -123,6 +123,19 @@ export function useMatchesQuery() {
   });
 }
 
+/** A wallet link may point beyond the recent matches and listings. RLS still applies. */
+export function useMatchQuery(id: string | null) {
+  type Detail = Match & { listing: import('@/types').MarketListing | null; payment: MatchPayment | null };
+  return useQuery({
+    queryKey: [...keys.matches, 'detail', id],
+    enabled: !!id,
+    queryFn: () => select<Detail>((c, signal) => c.from('matches')
+      .select('*, listing:market_listings(*), payment:match_payments(*)')
+      .eq('id', id!)
+      .abortSignal(signal) as unknown as PromiseLike<{ data: Detail[] | null; error: { message: string } | null }>),
+  });
+}
+
 export function useArchiveNotesQuery() {
   return useQuery({
     queryKey: keys.archiveNotes,
@@ -153,17 +166,24 @@ export function useAccountsQuery() {
 
 /** One wallet's lines, newest first, each with the event it belongs to. */
 export function useLedgerLinesQuery(accountId: string | null) {
-  return useQuery({
-    queryKey: [...keys.ledger, accountId],
+  const pageSize = 20;
+  return useInfiniteQuery({
+    queryKey: [...keys.ledger, 'pages', accountId],
     enabled: !!accountId,
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage: LedgerLine[]) => lastPage.length === pageSize ? lastPage[lastPage.length - 1].id : undefined,
     // Each line belongs to exactly one transaction, so PostgREST embeds it as
     // an object; untyped, supabase-js cannot know that and calls it an array.
-    queryFn: () => select<LedgerLine>((c, signal) => c.from('ledger_entries')
-      .select('id,amount,created_at,transaction:ledger_transactions(kind,memo,match_id)')
-      .eq('account_id', accountId!)
-      .order('id', { ascending: false })
-      .limit(100)
-      .abortSignal(signal) as unknown as PromiseLike<{ data: LedgerLine[] | null; error: { message: string } | null }>),
+    queryFn: ({ pageParam }) => select<LedgerLine>((c, signal) => {
+      let query = c.from('ledger_entries')
+        .select('id,amount,created_at,transaction:ledger_transactions(kind,memo,match_id)')
+        .eq('account_id', accountId!)
+        .order('id', { ascending: false })
+        .limit(pageSize);
+      // An ID cursor keeps newly arriving entries from shifting older pages.
+      if (pageParam !== null) query = query.lt('id', pageParam);
+      return query.abortSignal(signal) as unknown as PromiseLike<{ data: LedgerLine[] | null; error: { message: string } | null }>;
+    }),
   });
 }
 

@@ -5,7 +5,7 @@ import { buildArchive, type ArchiveFounder } from '@/lib/archive';
 import { heldMatchesMissing } from '@/lib/payments';
 import {
   useAccountsQuery,
-  useLedgerLinesQuery,
+  useMatchQuery,
   useMatchPaymentsQuery,
   useArchiveEventsQuery,
   useArchiveNotesQuery,
@@ -198,10 +198,11 @@ export function useListings() {
   };
 }
 
-export function useMatches() {
+export function useMatches(requestedId: string | null = null) {
   const { people, viewerProfileId, loading: peopleLoading, error: peopleError } = usePeople();
   const listings = useListingsQuery();
   const matches = useMatchesQuery();
+  const requested = useMatchQuery(requestedId);
   const payments = useMatchPaymentsQuery();
 
   const rows = useMemo<MatchWithParties[]>(() => {
@@ -211,22 +212,28 @@ export function useMatches() {
     // A match with FLOW still on hold stays, however old: someone has to
     // release or refund it. Its listing came with it, for the same reason.
     const held = heldMatchesMissing(matches.data ?? [], payments.data ?? []);
+    const detail = requested.data?.[0];
     const all = [...(matches.data ?? []), ...held.map(({ listing: _listing, ...m }) => m)];
+    if (detail) {
+      const index = all.findIndex((m) => m.id === detail.id);
+      if (index >= 0) all.splice(index, 1);
+      all.unshift(detail);
+    }
     const heldListing = new Map(held.map((m) => [m.id, m.listing ?? undefined]));
     return all.map((m) => ({
       ...m,
       initiator: byId.get(m.initiator_profile_id),
       matched: byId.get(m.matched_profile_id),
-      listing: m.listing_id ? listingById.get(m.listing_id) ?? heldListing.get(m.id) : undefined,
-      payment: paymentById.get(m.id),
+      listing: m.id === detail?.id ? detail.listing ?? undefined : m.listing_id ? listingById.get(m.listing_id) ?? heldListing.get(m.id) : undefined,
+      payment: m.id === detail?.id ? detail.payment ?? undefined : paymentById.get(m.id),
     }));
-  }, [matches.data, listings.data, payments.data, people]);
+  }, [matches.data, requested.data, listings.data, payments.data, people]);
 
   return {
     matches: rows,
     viewerProfileId,
-    loading: peopleLoading || listings.isPending || matches.isPending || payments.isPending,
-    error: peopleError || firstError(listings, matches, payments),
+    loading: peopleLoading || listings.isPending || matches.isPending || payments.isPending || (!!requestedId && requested.isPending),
+    error: peopleError || firstError(listings, matches, payments, requested),
   };
 }
 
@@ -284,30 +291,28 @@ export function useArchive() {
 
 /**
  * Your FLOW wallet (00016): the balance, what is on hold from you and for
- * you, and your ledger lines. The balance is the database's own figure,
- * which the ledger's lines always add up to.
+ * you. History is fetched separately, only on the Wallet page.
  */
 export function useWallet() {
   const { viewerProfileId, loading: peopleLoading, error: peopleError } = usePeople();
   const accounts = useAccountsQuery();
   const payments = useMatchPaymentsQuery();
   const account = (accounts.data ?? []).find((a) => a.profile_id === viewerProfileId) ?? null;
-  const lines = useLedgerLinesQuery(account?.id ?? null);
 
   const held = (payments.data ?? []).filter((p) => p.status === 'held');
   const heldFromMe = held.filter((p) => p.payer_profile_id === viewerProfileId).reduce((n, p) => n + p.amount, 0);
   const heldForMe = held.filter((p) => p.payee_profile_id === viewerProfileId).reduce((n, p) => n + p.amount, 0);
 
-  const loading = peopleLoading || accounts.isPending || payments.isPending || (!!account && lines.isPending);
+  const loading = peopleLoading || accounts.isPending || payments.isPending;
   const stuck = useStuck(loading);
   return {
     // Null until the founder number is claimed: no number, no wallet yet.
     balance: account ? Number(account.balance) : null,
+    accountId: account?.id ?? null,
     heldFromMe,
     heldForMe,
-    lines: lines.data ?? [],
     loading: loading && !stuck,
-    error: peopleError || firstError(accounts, payments, lines) || (stuck ? STUCK_MESSAGE : ''),
-    retry: () => { accounts.refetch(); payments.refetch(); if (account) lines.refetch(); },
+    error: peopleError || firstError(accounts, payments) || (stuck ? STUCK_MESSAGE : ''),
+    retry: () => { accounts.refetch(); payments.refetch(); },
   };
 }
